@@ -1,0 +1,51 @@
+{
+  "name": "zombie-catan-wasteland",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "dev:client:online": "vite --host 127.0.0.1 --mode online",
+    "dev:server": "tsx server/index.ts",
+    "dev:online": "concurrently \"npm run dev:client:online\" \"npm run dev:server\"",
+    "optimize:art-assets": "node scripts/convert-hero-images.mjs",
+    "optimize:hero-images": "node scripts/convert-hero-images.mjs",
+    "build": "npm run build:client && npm run build:server",
+    "build:client": "npm run typecheck:app && vite build",
+    "build:server": "npm run typecheck:server && node scripts/build-server.mjs",
+    "typecheck": "npm run typecheck:app && npm run typecheck:server",
+    "typecheck:app": "tsc -p tsconfig.app.json --pretty false",
+    "typecheck:server": "tsc -p tsconfig.server.json --pretty false",
+    "preview": "vite preview --host 127.0.0.1",
+    "start": "node server-dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.9.1",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^5.2.0",
+    "concurrently": "^9.2.1",
+    "esbuild": "^0.21.5",
+    "ffmpeg-static": "^5.3.0",
+    "jsdom": "^25.0.1",
+    "tsx": "^4.22.3",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.21",
+    "vitest": "^2.1.8"
+  }
+}

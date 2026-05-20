@@ -1,0 +1,34 @@
+:root {
+  --color-iron: #171916;
+  --color-rust: #9f432f;
+  --color-bone: #e7d6b2;
+  --color-toxic: #89a348;
+  --color-ash: #565a56;
+  --color-signal-blue: #4f82a6;
+
+  --panel-dark: rgba(23, 25, 22, 0.9);
+  --panel-paper: rgba(222, 203, 161, 0.92);
+  --panel-alert: rgba(114, 28, 25, 0.92);
+
+  --player-red: #d84f3f;
+  --player-blue: #2b78d4;
+  --player-green: #209468;
+  --player-amber: #d49b28;
+  --player-white: #dad6c8;
+  --player-ash: #5b7f86;
+
+  --motion-fast: 120ms;
+  --motion-medium: 220ms;
+  --motion-slow: 420ms;
+
+  --z-board: 10;
+  --z-hand: 20;
+  --z-dock: 30;
+  --z-modal: 1000;
+  --z-privacy: 1100;
+
+  --shell-left-width: 220px;
+  --shell-right-width: 300px;
+  --shell-top-height: 112px;
+  --shell-bottom-height: 168px;
+}

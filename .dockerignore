@@ -1,0 +1,22 @@
+node_modules
+dist
+server-dist
+output
+test-results
+.playwright-mcp
+tmp
+data
+docs
+.git
+*.log
+*.tsbuildinfo
+ 游戏音乐
+verify-untar
+.railway-deploy
+.railway-release
+.railway-ssh
+.codex-vite.log
+.codex-vite.err.log
+*.tgz
+*.docx
+*.png
