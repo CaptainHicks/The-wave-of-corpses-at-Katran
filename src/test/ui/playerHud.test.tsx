@@ -63,7 +63,7 @@ function scoringState(): GameState {
 }
 
 describe("PlayerHud", () => {
-  it("marks only the current player's portrait for the turn glow", () => {
+  it("marks only the current player's card as active", () => {
     const state = scoringState();
     const p2 = player({
       id: "p2",
@@ -76,10 +76,15 @@ describe("PlayerHud", () => {
     state.players = [state.players[0], p2];
     state.currentPlayerId = p2.id;
 
-    render(<PlayerHud state={state} />);
+    const { container } = render(<PlayerHud state={state} />);
+    const cards = container.querySelectorAll(".player-hud-card");
 
-    expect(screen.getByAltText("A头像").closest(".faction-portrait")).not.toHaveClass("turn-glow");
-    expect(screen.getByAltText("B头像").closest(".faction-portrait")).toHaveClass("turn-glow");
+    expect(cards[0]).not.toHaveClass("current-turn");
+    expect(cards[0]?.querySelector(".faction-portrait")).not.toHaveClass("turn-glow");
+    expect(cards[0]?.querySelector(".current-player-signal")).toBeNull();
+    expect(cards[1]).toHaveClass("current-turn");
+    expect(cards[1]?.querySelector(".faction-portrait")).not.toHaveClass("turn-glow");
+    expect(cards[1]?.querySelector(".current-player-signal")).toBeInTheDocument();
   });
 
   it("opens a score breakdown dialog from the score badge", () => {

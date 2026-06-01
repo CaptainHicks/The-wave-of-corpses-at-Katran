@@ -14,12 +14,12 @@ export function OnlineRoomPanel({
     <section className="panel compact system-menu-content">
       <h2>
         <Radio size={18} />
-        鍦ㄧ嚎鑱旀満
+        在线联机
       </h2>
 
       <div className="system-menu-section">
         <div className="system-menu-section-heading">
-          <span>鎴块棿鐘舵€?</span>
+          <span>房间状态</span>
           <small>{connectionLabel(connectionState)}</small>
         </div>
         <div className="system-menu-action-grid">
@@ -30,19 +30,19 @@ export function OnlineRoomPanel({
             }}
           >
             <Copy size={16} />
-            <span>澶嶅埗鎴块棿鐮?{roomCode}</span>
+            <span>复制房间码 {roomCode}</span>
           </button>
           <button className="system-menu-action system-menu-action-danger" onClick={onLeaveRoom}>
             <LogOut size={16} />
-            <span>绂诲紑鍦ㄧ嚎鎴块棿</span>
+            <span>离开在线房间</span>
           </button>
         </div>
       </div>
 
       <div className="system-menu-section">
         <div className="system-menu-section-heading">
-          <span>澹伴煶璁剧疆</span>
-          <small>鏈満鍋忓ソ</small>
+          <span>声音设置</span>
+          <small>本机偏好</small>
         </div>
         <AudioSettingsPanel className="system-audio-settings-panel" />
       </div>
@@ -53,12 +53,12 @@ export function OnlineRoomPanel({
 function connectionLabel(state: "disconnected" | "connecting" | "connected" | "reconnecting") {
   switch (state) {
     case "connected":
-      return "宸茶繛鎺?";
+      return "已连接";
     case "connecting":
-      return "杩炴帴涓?";
+      return "连接中";
     case "reconnecting":
-      return "閲嶈繛涓?";
+      return "重连中";
     default:
-      return "鏈繛鎺?";
+      return "未连接";
   }
 }

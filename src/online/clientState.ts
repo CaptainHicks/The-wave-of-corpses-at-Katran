@@ -25,6 +25,32 @@ export function materializeOnlineGameState(view: OnlineGameView): GameState {
   };
 }
 
+export function buildOnlineViewRevision(view: OnlineGameView): string {
+  const pending = view.publicState.pending;
+  const latestLog = view.publicState.log[view.publicState.log.length - 1];
+  const latestLogId = latestLog?.id;
+
+  return JSON.stringify({
+    roomCode: view.roomMeta.roomCode,
+    viewerPlayerId: view.viewerPlayerId,
+    turn: view.publicState.turn,
+    currentPlayerId: view.publicState.currentPlayerId,
+    phase: view.publicState.phase,
+    pending: pending
+      ? {
+          kind: pending.kind,
+          playerId: pending.playerId,
+          amount: pending.amount,
+          reason: pending.reason,
+          targetPlayerId: pending.targetPlayerId,
+          actorId: pending.actorId
+        }
+      : null,
+    lastCommand: view.lastCommand ?? null,
+    latestLogId: latestLogId ?? null
+  });
+}
+
 function materializePlayer(viewerSafePlayer: OnlineGameView["publicState"]["players"][number], view: OnlineGameView): PlayerState {
   const isViewer = viewerSafePlayer.id === view.viewerPlayerId;
 

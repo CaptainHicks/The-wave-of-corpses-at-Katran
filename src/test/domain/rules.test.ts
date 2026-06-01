@@ -23,6 +23,7 @@ import {
   legalRecruitVertices,
   longestSupplyLength
 } from "../../domain/rules";
+import { randomInt } from "../../domain/rng";
 import type { BoardState, EdgeState, GameState, Resources } from "../../domain/types";
 import { createResources } from "../../domain/constants";
 
@@ -425,6 +426,24 @@ describe("setup and production", () => {
     expect(state.currentPlayerId).toBe("p1");
     const buildings = Object.values(state.board.vertices).filter((vertex) => vertex.building);
     expect(buildings).toHaveLength(6);
+  });
+
+  it("rolls two separate six-sided dice from consecutive random draws", () => {
+    const state = setupGame();
+    const [first, rngAfterFirst] = randomInt(state.rng, 6);
+    const [second, rngAfterSecond] = randomInt(rngAfterFirst, 6);
+
+    const next = applyCommand(state, { type: "rollDice" });
+
+    expect(next.dice).toEqual([first + 1, second + 1]);
+    expect(next.rng).toEqual(rngAfterSecond);
+    expect(next.dice?.every((value) => value >= 1 && value <= 6)).toBe(true);
+  });
+
+  it("rejects invalid forced dice values before applying the roll", () => {
+    const state = setupGame();
+
+    expect(() => applyCommand(state, { type: "rollDice", forced: [0, 7] })).toThrow("骰子点数必须是 1 到 6。");
   });
 
   it("produces resources from an adjacent numbered tile", () => {

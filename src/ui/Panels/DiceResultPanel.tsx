@@ -1,9 +1,24 @@
 import { Disc3 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { GameState } from "../../domain/types";
+import { gameAudio } from "../audio/audioController";
 import type { TurnUiMode } from "../selectors/turnUiMode";
 
 const REEL_VALUES = [8, 3, 11, 5, 10, 2, 12];
+const REEL_SPIN_DURATION_MS = 920;
+const REEL_TICK_DELAYS_MS = [0, 92, 176, 262, 364, 496, 664, 850] as const;
+const REEL_START_DELAYS_MS = [0, 70, 130] as const;
+
+function prefersReducedMotion(): boolean {
+  return Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
+}
+
+function scheduleSlotTicks(): number[] {
+  if (prefersReducedMotion()) return [];
+  return REEL_START_DELAYS_MS.flatMap((reelDelay) =>
+    REEL_TICK_DELAYS_MS.map((tickDelay) => window.setTimeout(() => gameAudio.playSlotTick(), reelDelay + tickDelay))
+  );
+}
 
 export function DiceResultPanel({ state }: { state: GameState; mode: TurnUiMode }) {
   const diceA = state.dice?.[0];
@@ -19,8 +34,12 @@ export function DiceResultPanel({ state }: { state: GameState; mode: TurnUiMode 
     }
     setSpinKey((key) => key + 1);
     setIsSpinning(true);
-    const timeout = window.setTimeout(() => setIsSpinning(false), 920);
-    return () => window.clearTimeout(timeout);
+    const tickTimeouts = scheduleSlotTicks();
+    const timeout = window.setTimeout(() => setIsSpinning(false), REEL_SPIN_DURATION_MS);
+    return () => {
+      window.clearTimeout(timeout);
+      tickTimeouts.forEach((tickTimeout) => window.clearTimeout(tickTimeout));
+    };
   }, [diceA, diceB]);
 
   return (

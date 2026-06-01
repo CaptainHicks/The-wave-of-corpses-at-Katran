@@ -96,6 +96,7 @@ describe("GameShell map view", () => {
   const originalOffsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
   const originalInnerWidth = Object.getOwnPropertyDescriptor(window, "innerWidth");
   const originalInnerHeight = Object.getOwnPropertyDescriptor(window, "innerHeight");
+  const originalMatchMedia = window.matchMedia;
 
   beforeEach(() => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1672 });
@@ -127,6 +128,16 @@ describe("GameShell map view", () => {
     HTMLElement.prototype.hasPointerCapture = vi.fn(() => false);
     HTMLElement.prototype.setPointerCapture = vi.fn();
     HTMLElement.prototype.releasePointerCapture = vi.fn();
+    window.matchMedia = vi.fn().mockImplementation(() => ({
+      matches: false,
+      media: "(pointer: fine)",
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn()
+    })) as typeof window.matchMedia;
   });
 
   afterEach(() => {
@@ -136,7 +147,28 @@ describe("GameShell map view", () => {
     if (originalOffsetHeight) Object.defineProperty(HTMLElement.prototype, "offsetHeight", originalOffsetHeight);
     if (originalInnerWidth) Object.defineProperty(window, "innerWidth", originalInnerWidth);
     if (originalInnerHeight) Object.defineProperty(window, "innerHeight", originalInnerHeight);
+    window.matchMedia = originalMatchMedia;
     vi.restoreAllMocks();
+  });
+
+  it("keeps the same map and button proportions on coarse pointers", () => {
+    window.matchMedia = vi.fn().mockImplementation(() => ({
+      matches: true,
+      media: "(pointer: coarse)",
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn()
+    })) as typeof window.matchMedia;
+
+    const { container } = renderGameShell();
+    const shell = container.querySelector(".game-shell") as HTMLElement;
+    const world = container.querySelector(".map-world") as HTMLElement;
+
+    expect(world.style.getPropertyValue("--map-scale")).toBe("0.7");
+    expect(shell.style.getPropertyValue("--touch-target-min")).toBe("");
   });
 
   it("keeps the panned viewport center anchored when zooming", () => {
@@ -174,6 +206,21 @@ describe("GameShell map view", () => {
 
     expect(numericStylePx(world, "--map-pan-x")).toBeCloseTo(140);
     expect(numericStylePx(world, "--map-pan-y")).toBeCloseTo(80);
+  });
+
+  it("does not turn tiny tap jitter into a map pan after stage scaling", () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 836 });
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 470.5 });
+
+    const { container } = renderGameShell();
+    const layer = container.querySelector(".map-layer") as HTMLElement;
+    const world = container.querySelector(".map-world") as HTMLElement;
+
+    dispatchPointerEvent(layer, "pointerdown", { pointerId: 1, button: 0, clientX: 100, clientY: 100 });
+    dispatchPointerEvent(layer, "pointermove", { pointerId: 1, buttons: 1, clientX: 104, clientY: 100 });
+
+    expect(numericStylePx(world, "--map-pan-x")).toBeCloseTo(0);
+    expect(numericStylePx(world, "--map-pan-y")).toBeCloseTo(0);
   });
 
   it("supports pinch zoom and two-finger panning on touch devices", () => {

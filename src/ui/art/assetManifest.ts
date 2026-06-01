@@ -95,6 +95,56 @@ export const boardMarkerAssets = {
   }
 };
 
+const pieceFoldersByPlayerId: Record<string, string> = {
+  p1: "red",
+  p2: "blue",
+  p3: "green",
+  p4: "yellow",
+  p5: "purple",
+  p6: "gray"
+};
+
+const pieceFoldersByFactionId: Record<string, string> = {
+  "red-rust": "red",
+  "blue-steel": "blue",
+  "green-oasis": "green",
+  "gold-sand": "yellow",
+  "white-tower": "purple",
+  "ash-merchant": "gray"
+};
+
+const pieceFoldersByColor: Record<string, string> = {
+  "#d84f3f": "red",
+  "#2b78d4": "blue",
+  "#209468": "green",
+  "#d49b28": "yellow",
+  "#8e5bb7": "purple",
+  "#5b7f86": "gray"
+};
+
+function resolvePieceFolder({
+  playerId,
+  factionId,
+  color
+}: {
+  playerId: string;
+  factionId?: string;
+  color?: string;
+}) {
+  return (
+    (factionId ? pieceFoldersByFactionId[factionId] : undefined) ??
+    (color ? pieceFoldersByColor[color.toLowerCase()] : undefined) ??
+    pieceFoldersByPlayerId[playerId]
+  );
+}
+
+function routeAssets(folder: string): Record<RouteType, string> {
+  return {
+    transport: `/assets/board/routes/${folder}/transport.v1.webp`,
+    convoy: `/assets/board/routes/${folder}/convoy.v1.webp`
+  };
+}
+
 export const routePieceAssets: Record<string, Record<RouteType, string>> = {
   p1: {
     transport: "/assets/board/routes/red/transport.v1.webp",
@@ -122,27 +172,37 @@ export const routePieceAssets: Record<string, Record<RouteType, string>> = {
   }
 };
 
-const playerPieceFolders: Record<string, string> = {
-  p1: "red",
-  p2: "blue",
-  p3: "green",
-  p4: "yellow",
-  p5: "purple",
-  p6: "gray"
-};
+export function getRoutePieceAsset({
+  playerId,
+  factionId,
+  color,
+  routeType
+}: {
+  playerId: string;
+  factionId?: string;
+  color?: string;
+  routeType: RouteType;
+}): string | undefined {
+  const folder = resolvePieceFolder({ playerId, factionId, color });
+  return folder ? routeAssets(folder)[routeType] : undefined;
+}
 
 export function getBuildingPieceAsset({
   playerId,
+  factionId,
+  color,
   buildingType,
   hasWatchtower,
   militiaCount
 }: {
   playerId: string;
+  factionId?: string;
+  color?: string;
   buildingType: BuildingType;
   hasWatchtower: boolean;
   militiaCount: number;
 }): string | undefined {
-  const folder = playerPieceFolders[playerId];
+  const folder = resolvePieceFolder({ playerId, factionId, color });
   if (!folder) return undefined;
 
   const base = buildingType === "fortress" ? "fortress" : "camp";

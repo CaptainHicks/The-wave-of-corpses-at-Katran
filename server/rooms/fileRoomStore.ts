@@ -1,11 +1,9 @@
 import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { StoredOnlineRoom, StoredRoomSeat } from "./types";
+import { ACTIVE_ROOM_TTL_MS, LOBBY_TTL_MS, type RoomStore, type RoomStoreTransaction } from "./roomStore";
 
-const LOBBY_TTL_MS = 24 * 60 * 60 * 1000;
-const ACTIVE_ROOM_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-
-export class FileRoomStore {
+export class FileRoomStore implements RoomStore {
   private readonly rootDir: string;
   private readonly now: () => number;
 
@@ -31,6 +29,18 @@ export class FileRoomStore {
       if (isMissingFileError(error)) return undefined;
       throw error;
     }
+  }
+
+  async deleteRoom(roomCode: string): Promise<void> {
+    await rm(this.getRoomPath(roomCode), { force: true });
+  }
+
+  async withRoomTransaction<T>(roomCode: string, task: (transaction: RoomStoreTransaction) => Promise<T>): Promise<T> {
+    return task({
+      loadRoom: () => this.loadRoom(roomCode),
+      saveRoom: (room) => this.saveRoom(room),
+      deleteRoom: () => this.deleteRoom(roomCode)
+    });
   }
 
   async findRoomBySession(

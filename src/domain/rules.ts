@@ -353,11 +353,21 @@ function startPreparePhase(state: GameState): void {
   event(state, `${player.name} 的准备阶段：准备中的民兵变为已激活。`);
 }
 
+function assertDiceValues(dice: [number, number]): void {
+  assertRule(
+    dice.length === 2 && dice.every((value) => Number.isInteger(value) && value >= 1 && value <= 6),
+    "骰子点数必须是 1 到 6。"
+  );
+}
+
 function rollDice(state: GameState, forced?: [number, number]): void {
   ensureNoPending(state);
   assertRule(state.phase === "dice" || state.phase === "prepare", "当前阶段不能掷骰。");
   if (state.phase === "prepare") state.phase = "dice";
   let dice = forced;
+  if (dice) {
+    assertDiceValues(dice);
+  }
   if (!dice) {
     const [a, rngA] = randomInt(state.rng, 6);
     const [b, rngB] = randomInt(rngA, 6);

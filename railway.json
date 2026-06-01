@@ -1,9 +1,0 @@
-{
-  "$schema": "https://railway.com/railway.schema.json",
-  "buildCommand": "npm run build",
-  "startCommand": "npm run start",
-  "healthcheckPath": "/health",
-  "healthcheckTimeout": 120,
-  "restartPolicyType": "ON_FAILURE",
-  "restartPolicyMaxRetries": 10
-}

@@ -14,8 +14,8 @@ describe("MainTurnButton", () => {
     );
 
     expect(getByRole("button")).toHaveClass("illustrated-turn-button");
-    expect(getByText("摇骰子")).toBeInTheDocument();
-    expect(getByText("掷出两个骰子 获取资源")).toBeInTheDocument();
+    expect(getByText("掷骰子")).toBeInTheDocument();
+    expect(getByText("掷出两个骰子，获取资源")).toBeInTheDocument();
     expect(container.querySelector(".turn-button-art")).toHaveAttribute("src", "/assets/hud/dice.v1.webp");
   });
 

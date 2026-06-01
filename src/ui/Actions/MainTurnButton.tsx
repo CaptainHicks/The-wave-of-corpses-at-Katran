@@ -11,7 +11,7 @@ export function MainTurnButton({
   mode,
   animationBusy,
   interactionLocked = false,
-  lockedSubtitle = "绛夊緟褰撳墠鐜╁瀹屾垚琛屽姩",
+  lockedSubtitle = "其他玩家正在行动",
   submit
 }: {
   state: GameState;
@@ -26,7 +26,7 @@ export function MainTurnButton({
       <button className="main-turn-button illustrated-turn-button illustrated-turn-button-muted" disabled>
         <TurnButtonContent
           iconUrl={TURN_BUTTON_ART.hourglass}
-          title="绛夊緟瀵规墜"
+          title="等待其他玩家"
           subtitle={lockedSubtitle}
         />
       </button>
@@ -41,11 +41,7 @@ export function MainTurnButton({
         aria-busy={animationBusy}
         onClick={() => submit({ type: "rollDice" })}
       >
-        <TurnButtonContent
-          iconUrl={TURN_BUTTON_ART.dice}
-          title="摇骰子"
-          subtitle="掷出两个骰子 获取资源"
-        />
+        <TurnButtonContent iconUrl={TURN_BUTTON_ART.dice} title="掷骰子" subtitle="掷出两个骰子，获取资源" />
       </button>
     );
   }
@@ -56,7 +52,7 @@ export function MainTurnButton({
         <TurnButtonContent
           iconUrl={TURN_BUTTON_ART.hourglass}
           title="等待处理"
-          subtitle="请先完成待处理"
+          subtitle="请先完成待处理选择"
         />
       </button>
     );
@@ -65,11 +61,7 @@ export function MainTurnButton({
   if (mode === "victory") {
     return (
       <button className="main-turn-button illustrated-turn-button illustrated-turn-button-muted" disabled>
-        <TurnButtonContent
-          iconUrl={TURN_BUTTON_ART.hourglass}
-          title="战局结束"
-          subtitle="胜利已经结算"
-        />
+        <TurnButtonContent iconUrl={TURN_BUTTON_ART.hourglass} title="战局结束" subtitle="胜利已经结算" />
       </button>
     );
   }
@@ -77,11 +69,7 @@ export function MainTurnButton({
   if (state.phase !== "action") {
     return (
       <button className="main-turn-button illustrated-turn-button illustrated-turn-button-muted" disabled>
-        <TurnButtonContent
-          iconUrl={TURN_BUTTON_ART.hourglass}
-          title="等待棋盘"
-          subtitle="完成当前棋盘步骤"
-        />
+        <TurnButtonContent iconUrl={TURN_BUTTON_ART.hourglass} title="等待棋盘" subtitle="完成当前棋盘步骤" />
       </button>
     );
   }

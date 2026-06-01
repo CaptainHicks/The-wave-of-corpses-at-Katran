@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "dev:client:online": "vite --host 127.0.0.1 --mode online",
-    "dev:server": "tsx server/index.ts",
+    "dev:server": "tsx --env-file=.env.example server/index.ts",
     "dev:online": "concurrently \"npm run dev:client:online\" \"npm run dev:server\"",
     "optimize:art-assets": "node scripts/convert-hero-images.mjs",
     "optimize:hero-images": "node scripts/convert-hero-images.mjs",
@@ -23,6 +23,7 @@
     "e2e": "playwright test"
   },
   "dependencies": {
+    "@cloudbase/node-sdk": "^3.10.1",
     "express": "^5.2.1",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",

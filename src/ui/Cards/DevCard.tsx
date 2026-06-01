@@ -11,24 +11,38 @@ export function DevCard({
   reason,
   selected,
   count,
+  coarsePointer,
   index,
   total,
+  touchPullDistance = 0,
+  touchDragging = false,
+  touchPlayReady = false,
+  forceDenied = false,
+  onActivate,
   onSelect,
   onHover,
   onHoverEnd,
-  onPlay
+  onPlay,
+  onCoarsePointerDown
 }: {
   card: DevCardModel;
   playable: boolean;
   reason?: string;
   selected: boolean;
   count: number;
+  coarsePointer: boolean;
   index: number;
   total: number;
+  touchPullDistance?: number;
+  touchDragging?: boolean;
+  touchPlayReady?: boolean;
+  forceDenied?: boolean;
+  onActivate: () => void;
   onSelect: () => void;
   onHover: (event: MouseEvent<HTMLElement>) => void;
   onHoverEnd: () => void;
   onPlay: () => boolean;
+  onCoarsePointerDown: (pointerId: number, clientX: number, clientY: number) => void;
 }) {
   const pointerStartY = useRef<number>();
   const swallowedClick = useRef(false);
@@ -43,8 +57,19 @@ export function DevCard({
     "--fan-x": `${offset * spacing}px`,
     "--fan-y": `${Math.abs(offset) * 13}px`,
     "--fan-rotation": `${offset * 6.5}deg`,
-    "--fan-z": index + 10
+    "--fan-z": index + 10,
+    "--touch-pull-y": `${-touchPullDistance}px`
   } as CSSProperties;
+  const className = [
+    "dev-hand-card",
+    playable ? "playable" : "locked",
+    selected ? "selected" : "",
+    denied || forceDenied ? "denied" : "",
+    touchDragging ? "touch-dragging" : "",
+    touchPlayReady ? "touch-play-ready" : ""
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   useEffect(() => {
     return () => {
@@ -64,10 +89,10 @@ export function DevCard({
     if (!onPlay()) showDenied();
   };
 
-  const startGesture = (clientY: number) => {
+  const startGesture = (clientY: number, selectOnPress: boolean) => {
     pointerStartY.current = clientY;
     swallowedClick.current = false;
-    onSelect();
+    if (selectOnPress) onSelect();
   };
 
   const finishGesture = (clientY: number, preventDefault: () => void, stopPropagation?: () => void) => {
@@ -84,9 +109,7 @@ export function DevCard({
 
   return (
     <article
-      className={`dev-hand-card ${playable ? "playable" : "locked"} ${selected ? "selected" : ""} ${
-        denied ? "denied" : ""
-      }`}
+      className={className}
       style={style}
       role="button"
       tabIndex={0}
@@ -99,7 +122,7 @@ export function DevCard({
           swallowedClick.current = false;
           return;
         }
-        onSelect();
+        onActivate();
       }}
       onMouseEnter={onHover}
       onMouseLeave={onHoverEnd}
@@ -107,7 +130,7 @@ export function DevCard({
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          onSelect();
+          onActivate();
         }
         if (event.key === "ArrowUp") {
           event.preventDefault();
@@ -115,19 +138,36 @@ export function DevCard({
         }
       }}
       onPointerDown={(event) => {
-        startGesture(event.clientY);
+        if (event.pointerType !== "mouse") {
+          swallowedClick.current = true;
+          pointerStartY.current = undefined;
+          onCoarsePointerDown(event.pointerId, event.clientX, event.clientY);
+          event.currentTarget.setPointerCapture(event.pointerId);
+          event.preventDefault();
+          return;
+        }
+        startGesture(event.clientY, event.pointerType === "mouse" || !coarsePointer);
         event.currentTarget.setPointerCapture(event.pointerId);
       }}
       onPointerUp={(event) => {
         if (event.currentTarget.hasPointerCapture(event.pointerId)) {
           event.currentTarget.releasePointerCapture(event.pointerId);
         }
+        if (event.pointerType !== "mouse") {
+          swallowedClick.current = true;
+          pointerStartY.current = undefined;
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
         finishGesture(event.clientY, () => event.preventDefault(), () => event.stopPropagation());
       }}
       onMouseDown={(event) => {
-        if (pointerStartY.current === undefined) startGesture(event.clientY);
+        if (coarsePointer) return;
+        if (pointerStartY.current === undefined) startGesture(event.clientY, !coarsePointer);
       }}
       onMouseUp={(event) => {
+        if (coarsePointer) return;
         finishGesture(event.clientY, () => event.preventDefault(), () => event.stopPropagation());
       }}
       onPointerCancel={() => {

@@ -4,8 +4,8 @@ export interface AudioSettings {
 }
 
 export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
-  musicVolume: 42,
-  sfxVolume: 72
+  musicVolume: 70,
+  sfxVolume: 80
 };
 
 const AUDIO_SETTINGS_KEY = "zombie-catan-audio-settings";

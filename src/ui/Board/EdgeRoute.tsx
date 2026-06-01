@@ -1,6 +1,6 @@
 import type { CSSProperties, MouseEvent } from "react";
 import type { EdgeState, PlayerState, RouteType, VertexState } from "../../domain/types";
-import { routePieceAssets } from "../art/assetManifest";
+import { getRoutePieceAsset } from "../art/assetManifest";
 
 export function EdgeRoute({
   edge,
@@ -10,6 +10,7 @@ export function EdgeRoute({
   legal,
   selected,
   queued,
+  coarsePointer,
   previewRouteType,
   previewOwner,
   onClick
@@ -21,6 +22,7 @@ export function EdgeRoute({
   legal: boolean;
   selected: boolean;
   queued: boolean;
+  coarsePointer?: boolean;
   previewRouteType?: RouteType;
   previewOwner?: PlayerState;
   onClick: () => void;
@@ -28,14 +30,29 @@ export function EdgeRoute({
   const routeStyle = edge.route
     ? ({ stroke: owner?.color, "--route-color": owner?.color ?? "#f2c14e" } as CSSProperties)
     : undefined;
-  const routeAsset = edge.route && owner ? routePieceAssets[owner.id]?.[edge.route.type] : undefined;
+  const routeAsset =
+    edge.route && owner
+      ? getRoutePieceAsset({
+          playerId: owner.id,
+          factionId: owner.factionId,
+          color: owner.color,
+          routeType: edge.route.type
+        })
+      : undefined;
   const midX = (a.x + b.x) / 2;
   const midY = (a.y + b.y) / 2;
   const routeLength = Math.hypot(b.x - a.x, b.y - a.y);
   const routeBoxHeight = 20;
   const routeAngle = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
   const previewAsset =
-    !edge.route && previewRouteType && previewOwner ? routePieceAssets[previewOwner.id]?.[previewRouteType] : undefined;
+    !edge.route && previewRouteType && previewOwner
+      ? getRoutePieceAsset({
+          playerId: previewOwner.id,
+          factionId: previewOwner.factionId,
+          color: previewOwner.color,
+          routeType: previewRouteType
+        })
+      : undefined;
   const previewStyle =
     previewRouteType && previewOwner
       ? ({ "--route-color": previewOwner.color } as CSSProperties)
@@ -66,7 +83,7 @@ export function EdgeRoute({
           className={`route-piece route-piece-${edge.route.type}`}
           aria-hidden="true"
         />
-        <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="edge edge-hitbox" />
+        <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={`edge edge-hitbox ${coarsePointer ? "coarse-hitbox" : ""}`} />
       </g>
     );
   }
@@ -97,7 +114,7 @@ export function EdgeRoute({
           }`}
           aria-hidden="true"
         />
-        <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="edge edge-hitbox" />
+        <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={`edge edge-hitbox ${coarsePointer ? "coarse-hitbox" : ""}`} />
       </g>
     );
   }
@@ -110,7 +127,7 @@ export function EdgeRoute({
       y2={b.y}
       className={`edge ${edge.route ? `route-${edge.route.type}` : ""} ${legal ? "legal" : ""} ${
         selected || queued ? "selected-edge" : ""
-      }`}
+      } ${coarsePointer ? "coarse-hitbox" : ""}`}
       style={routeStyle}
       data-edge-id={edge.id}
       onClick={(event: MouseEvent<SVGLineElement>) => {

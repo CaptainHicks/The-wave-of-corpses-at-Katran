@@ -2,9 +2,16 @@ import { fireEvent, render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { createResources } from "../../domain/constants";
 import {
+  vertexHasAdjacentBuilding,
+  vertexTouchesInitialResourceZone,
+  vertexTouchesOnlyRevealed,
+  vertexTouchesResource,
+  vertexTouchesWarehouse
+} from "../../domain/board";
+import {
   applyCommand,
-  legalBuildVertices,
   legalBuildEdges,
+  legalBuildVertices,
   legalInitialCampVertices,
   legalInitialRouteEdges,
   legalMerchantTiles,
@@ -12,7 +19,7 @@ import {
 } from "../../domain/rules";
 import type { GameState } from "../../domain/types";
 import { getBuildingPieceAsset, routePieceAssets } from "../../ui/art/assetManifest";
-import { BoardView } from "../../ui/Board/BoardView";
+import { BoardView, describeInitialCampResourceZone } from "../../ui/Board/BoardView";
 import type { UiSelection, UiTool } from "../../ui/gameUiTypes";
 
 function players() {
@@ -40,7 +47,13 @@ function setupActionState(seed: string): GameState {
   });
 }
 
-function renderBoard(state: GameState, tool: UiTool, submit = vi.fn(), selection?: UiSelection) {
+function renderBoard(
+  state: GameState,
+  tool: UiTool,
+  submit = vi.fn(),
+  selection?: UiSelection,
+  reportError = vi.fn()
+) {
   const setSelection = vi.fn();
   const view = render(
     <BoardView
@@ -49,13 +62,89 @@ function renderBoard(state: GameState, tool: UiTool, submit = vi.fn(), selection
       selection={selection}
       animationEvents={[]}
       setSelection={setSelection}
+      reportError={reportError}
       submit={submit}
     />
   );
-  return { ...view, submit, setSelection };
+  return { ...view, submit, setSelection, reportError };
+}
+
+function findLargeZoneBlockedInitialVertex(state: GameState) {
+  return Object.values(state.board.vertices).find(
+    (vertex) =>
+      !legalInitialCampVertices(state).includes(vertex.id) &&
+      !vertex.building &&
+      !vertexHasAdjacentBuilding(state.board, vertex.id) &&
+      vertexTouchesOnlyRevealed(state.board, vertex.id) &&
+      vertexTouchesResource(state.board, vertex.id, true) &&
+      !vertexTouchesWarehouse(state.board, vertex.id) &&
+      !vertexTouchesInitialResourceZone(state.board, vertex.id)
+  );
 }
 
 describe("BoardView interaction targets", () => {
+  it("removes visible camp previews during initial setup while keeping a larger hit area", () => {
+    const state = applyCommand(undefined, { type: "createGame", players: players(), seed: "initial-camp-markers" });
+    const legalVertices = legalInitialCampVertices(state);
+    const { container } = renderBoard(state, "none");
+
+    expect(legalVertices.length).toBeGreaterThan(0);
+    expect(container.querySelector(".building-piece-preview")).toBeNull();
+    expect(container.querySelector(".initial-camp-preview")).toBeNull();
+
+    const previewVertex = container.querySelector(`[data-vertex-id="${legalVertices[0]}"]`);
+    expect(previewVertex).toHaveClass("has-expanded-hit-area");
+    expect(previewVertex).not.toHaveClass("legal");
+    expect(previewVertex?.querySelector(".vertex-hit-area")).toHaveClass("preview-hit-area");
+    expect(previewVertex?.querySelector(".vertex-touch-cue")).toHaveAttribute("r", "13");
+  });
+
+  it("explains why an illegal initial camp vertex cannot be used", () => {
+    const state = applyCommand(undefined, { type: "createGame", players: players(), seed: "illegal-initial-camp" });
+    const illegalVertex = Object.values(state.board.vertices).find((vertex) => !legalInitialCampVertices(state).includes(vertex.id));
+    expect(illegalVertex).toBeTruthy();
+
+    const { container, submit, reportError } = renderBoard(state, "none");
+    fireEvent.click(container.querySelector(`[data-vertex-id="${illegalVertex!.id}"]`)!);
+
+    expect(submit).not.toHaveBeenCalled();
+    expect(reportError).toHaveBeenCalledTimes(1);
+    expect(reportError.mock.calls[0]?.[0]).toMatch(/初始营地|迷雾|资源|仓库|建筑|交叉点/);
+  });
+
+  it("classifies large resource zones by map side and uses that label in the setup hint", () => {
+    const expectedLabels = new Set(["左侧大资源区", "右侧大资源区", "左右两侧的大资源区", "中部大资源区"]);
+    const foundLabels = new Set<string>();
+    let blockedCase: { state: GameState; vertexId: string; label: string } | undefined;
+
+    for (let index = 0; index < 260; index += 1) {
+      const state = applyCommand(undefined, {
+        type: "createGame",
+        players: players(),
+        seed: `setup-zone-hint-${index}`
+      });
+      const label = describeInitialCampResourceZone(state.board);
+      if (expectedLabels.has(label)) {
+        foundLabels.add(label);
+      }
+      if (!blockedCase) {
+        const blockedVertex = findLargeZoneBlockedInitialVertex(state);
+        if (blockedVertex) {
+          blockedCase = { state, vertexId: blockedVertex.id, label };
+        }
+      }
+    }
+
+    expect(foundLabels).toEqual(expectedLabels);
+    expect(blockedCase).toBeTruthy();
+
+    const { container, submit, reportError } = renderBoard(blockedCase!.state, "none");
+    fireEvent.click(container.querySelector(`[data-vertex-id="${blockedCase!.vertexId}"]`)!);
+
+    expect(submit).not.toHaveBeenCalled();
+    expect(reportError).toHaveBeenCalledWith(`初始营地只能放在${blockedCase!.label}。`);
+  });
+
   it("uses the camp piece asset as the legal camp target preview", () => {
     let state = setupActionState("camp-preview");
     while (legalBuildVertices(state).length === 0) {
@@ -81,6 +170,25 @@ describe("BoardView interaction targets", () => {
     expect(preview?.closest(".vertex")?.querySelector(".vertex-hit-area")).toHaveClass("preview-hit-area");
   });
 
+  it("explains why an illegal camp construction target cannot be used", () => {
+    let state = setupActionState("illegal-camp-target");
+    while (legalBuildVertices(state).length === 0) {
+      const edgeId = legalBuildEdges(state, "transport")[0];
+      expect(edgeId).toBeTruthy();
+      state = applyCommand(state, { type: "buildRoute", edgeId, routeType: "transport", free: true });
+    }
+    const legalVertices = new Set(legalBuildVertices(state));
+    const illegalVertex = Object.values(state.board.vertices).find((vertex) => !legalVertices.has(vertex.id));
+    expect(illegalVertex).toBeTruthy();
+
+    const { container, submit, reportError } = renderBoard(state, "camp");
+    fireEvent.click(container.querySelector(`[data-vertex-id="${illegalVertex!.id}"]`)!);
+
+    expect(submit).not.toHaveBeenCalled();
+    expect(reportError).toHaveBeenCalledTimes(1);
+    expect(reportError.mock.calls[0]?.[0]).toMatch(/营地|路线|资源|建筑|隔 1 个空交叉点/);
+  });
+
   it("uses the route piece asset as the legal transport target preview", () => {
     const state = setupActionState("route-preview");
     const edgeId = legalBuildEdges(state, "transport")[0];
@@ -90,6 +198,20 @@ describe("BoardView interaction targets", () => {
     const preview = edge?.querySelector(".route-piece-preview");
 
     expect(preview).toHaveAttribute("href", routePieceAssets[state.currentPlayerId].transport);
+  });
+
+  it("explains why an illegal transport route target cannot be used", () => {
+    const state = setupActionState("illegal-route-target");
+    const legalEdges = new Set(legalBuildEdges(state, "transport"));
+    const illegalEdge = Object.values(state.board.edges).find((edge) => !legalEdges.has(edge.id));
+    expect(illegalEdge).toBeTruthy();
+
+    const { container, submit, reportError } = renderBoard(state, "transport");
+    fireEvent.click(container.querySelector(`[data-edge-id="${illegalEdge!.id}"]`)!);
+
+    expect(submit).not.toHaveBeenCalled();
+    expect(reportError).toHaveBeenCalledTimes(1);
+    expect(reportError.mock.calls[0]?.[0]).toMatch(/运输线|边缘|资源|棋子|路线/);
   });
 
   it("passes owner color to route piece filters without drawing exposed glow caps", () => {

@@ -104,6 +104,38 @@ describe("RightOperationDock", () => {
     expect(setTool).toHaveBeenCalledWith("none");
   });
 
+  it("shows readable online room copy in the system menu during online play", () => {
+    const onLeaveOnlineRoom = vi.fn();
+    render(
+      <RightOperationDock
+        state={minimalRollState()}
+        mode="mustRoll"
+        tool="none"
+        viewerPlayerId="p1"
+        interactionMode="online"
+        onlineRoomCode="ROOM42"
+        onlineConnectionState="connected"
+        animationBusy={false}
+        submit={vi.fn()}
+        setTool={vi.fn()}
+        setSelection={vi.fn()}
+        onClear={vi.fn()}
+        onImportState={vi.fn()}
+        onLeaveOnlineRoom={onLeaveOnlineRoom}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "菜单" }));
+
+    expect(screen.getByRole("heading", { name: "在线联机" })).toBeInTheDocument();
+    expect(screen.getByText("房间状态")).toBeInTheDocument();
+    expect(screen.getByText("已连接")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "复制房间码 ROOM42" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "离开在线房间" }));
+    expect(onLeaveOnlineRoom).toHaveBeenCalledOnce();
+  });
+
   it("only shows cheat controls for games created with debug mode", () => {
     const { container } = render(
       <RightOperationDock

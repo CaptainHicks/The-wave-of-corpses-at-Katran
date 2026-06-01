@@ -48,7 +48,7 @@ export function MilitiaAction({
         <h3>{COPY.commandTitle}</h3>
         <div className="button-grid">
           <button
-            className="tool-card"
+            className="tool-card militia-activate-card"
             disabled={inactive.length === 0}
             onClick={() => {
               setSelection(undefined);
@@ -57,7 +57,7 @@ export function MilitiaAction({
           >
             <AssetIcon src="/assets/hud/militia.v1.webp" className="tool-card-asset-icon" />
             <span>{COPY.activateButton}</span>
-            <small>{inactive.length}</small>
+            <small>{formatCost(COSTS.activateMilitia)}</small>
           </button>
           {inactive.length > 0 && <p className="phase-copy">{COPY.activateHelp}</p>}
           {active.map((militia) => (

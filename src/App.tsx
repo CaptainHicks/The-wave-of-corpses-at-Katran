@@ -1,7 +1,7 @@
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { applyCommand, serializeStateForText, RuleError } from "./domain/rules";
 import type { Command, GameState } from "./domain/types";
-import { materializeOnlineGameState } from "./online/clientState";
+import { buildOnlineViewRevision, materializeOnlineGameState } from "./online/clientState";
 import { loadGame, saveGame } from "./persistence/storage";
 import { useOnlineSession } from "./online/useOnlineSession";
 import { diffGameStates } from "./ui/animation/diffGameStates";
@@ -43,18 +43,48 @@ function appReducer(model: AppModel, action: AppAction): AppModel {
 function App() {
   const [savedGame, setSavedGame] = useState<GameState | undefined>(() => loadGame());
   const [model, dispatch] = useReducer(appReducer, undefined, () => ({}));
+  const [ruleHint, setRuleHint] = useState<{ id: number; message: string }>();
   const onlineSession = useOnlineSession();
   const localState = model.state;
-  const onlineState = onlineSession.gameView ? materializeOnlineGameState(onlineSession.gameView) : undefined;
+  const onlineState = useMemo(
+    () => (onlineSession.gameView ? materializeOnlineGameState(onlineSession.gameView) : undefined),
+    [onlineSession.gameView]
+  );
   const activeState = localState ?? onlineState;
   const previousStateRef = useRef<GameState>();
   const previousOnlineStateRef = useRef<GameState>();
+  const lastAnimatedOnlineViewRef = useRef<string>();
   const lastCommandRef = useRef<Command>();
   const { events: animationEvents, pushEvents, isAnimating } = useGameAnimations();
   const [tool, setTool] = useState<UiTool>("none");
   const [selection, setSelection] = useState<UiSelection>();
   const [privacy, setPrivacy] = useState(false);
   const [lastSeatPlayerId, setLastSeatPlayerId] = useState<string | undefined>();
+  const ruleHintTimerRef = useRef<number>();
+  const ruleHintIdRef = useRef(0);
+
+  const clearRuleHint = () => {
+    if (ruleHintTimerRef.current) {
+      window.clearTimeout(ruleHintTimerRef.current);
+      ruleHintTimerRef.current = undefined;
+    }
+    setRuleHint(undefined);
+  };
+
+  const showRuleHint = (message: string) => {
+    const id = ++ruleHintIdRef.current;
+    if (ruleHintTimerRef.current) {
+      window.clearTimeout(ruleHintTimerRef.current);
+    }
+    setRuleHint({ id, message });
+    ruleHintTimerRef.current = window.setTimeout(() => {
+      setRuleHint((current) => (current?.id === id ? undefined : current));
+      if (ruleHintTimerRef.current) {
+        window.clearTimeout(ruleHintTimerRef.current);
+        ruleHintTimerRef.current = undefined;
+      }
+    }, 2400);
+  };
 
   useAudioUnlock();
   useInteractiveAudioFeedback();
@@ -67,6 +97,14 @@ function App() {
           : "settlement-over"
         : "gameplay"
   );
+
+  useEffect(() => {
+    return () => {
+      if (ruleHintTimerRef.current) {
+        window.clearTimeout(ruleHintTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (localState) {
@@ -102,16 +140,19 @@ function App() {
   useEffect(() => {
     if (!onlineState || !onlineSession.gameView) {
       previousOnlineStateRef.current = undefined;
+      lastAnimatedOnlineViewRef.current = undefined;
       return;
     }
     const previous = previousOnlineStateRef.current;
     const command = onlineSession.gameView.lastCommand;
-    if (previous && command) {
+    const revision = buildOnlineViewRevision(onlineSession.gameView);
+    if (previous && command && lastAnimatedOnlineViewRef.current !== revision) {
       const animationInputs = diffGameStates(previous, onlineState, command, onlineSession.gameView.viewerPlayerId);
       pushEvents(animationInputs);
       gameAudio.playAnimationEvents(animationInputs);
     }
     previousOnlineStateRef.current = onlineState;
+    lastAnimatedOnlineViewRef.current = revision;
   }, [onlineSession.gameView, onlineState, pushEvents]);
 
   useEffect(() => {
@@ -152,10 +193,12 @@ function App() {
   useEffect(() => {
     if (onlineSession.connectionState !== "connected") {
       previousOnlineStateRef.current = undefined;
+      lastAnimatedOnlineViewRef.current = undefined;
     }
   }, [onlineSession.connectionState]);
 
   const submitLocal = (command: Command) => {
+    clearRuleHint();
     previousStateRef.current = localState;
     lastCommandRef.current = command;
     dispatch({ type: "command", command });
@@ -164,6 +207,8 @@ function App() {
 
   const submitOnline = (command: Command) => {
     if (!onlineSession.gameView) return;
+    clearRuleHint();
+    dispatch({ type: "error", message: undefined });
     setSelection(undefined);
     void onlineSession.sendCommand({
       roomCode: onlineSession.gameView.roomMeta.roomCode,
@@ -172,6 +217,7 @@ function App() {
   };
 
   const clearToMenu = () => {
+    clearRuleHint();
     dispatch({ type: "clear" });
     setSavedGame(loadGame());
     setPrivacy(false);
@@ -180,6 +226,7 @@ function App() {
 
   const continueSavedGame = () => {
     if (!savedGame) return;
+    clearRuleHint();
     const nextSeatPlayerId = savedGame.pending?.playerId ?? savedGame.currentPlayerId;
     onlineSession.leaveRoom();
     dispatch({ type: "import", state: savedGame });
@@ -208,6 +255,7 @@ function App() {
         }
         onContinue={continueSavedGame}
         onCreate={(command) => {
+          clearRuleHint();
           onlineSession.leaveRoom();
           submitLocal(command);
         }}
@@ -218,11 +266,13 @@ function App() {
           lobbyView: onlineSession.lobbyView,
           onCreateRoom: (payload) => onlineSession.createRoom(payload),
           onJoinRoom: (payload) => onlineSession.joinRoom(payload),
+          onChooseFaction: (payload) => onlineSession.chooseFaction(payload),
           onStartRoom: () => {
             if (!onlineSession.lobbyView) return;
             void onlineSession.startRoom({ roomCode: onlineSession.lobbyView.roomMeta.roomCode });
           },
           onLeaveRoom: () => {
+            clearRuleHint();
             onlineSession.leaveRoom();
             setTool("none");
             setSelection(undefined);
@@ -243,6 +293,7 @@ function App() {
   const clearHandler = localState
     ? clearToMenu
     : () => {
+        clearRuleHint();
         onlineSession.leaveRoom();
         setTool("none");
         setSelection(undefined);
@@ -264,14 +315,17 @@ function App() {
       selection={selection}
       animationEvents={animationEvents}
       animationBusy={isAnimating}
+      ruleHint={ruleHint?.message}
       onClosePrivacy={() => setPrivacy(false)}
       onDismissError={() => {
         dispatch({ type: "error", message: undefined });
         onlineSession.dismissError();
       }}
+      onReportError={showRuleHint}
       onClear={clearHandler}
       onImportState={importHandler}
       onLeaveOnlineRoom={() => {
+        clearRuleHint();
         onlineSession.leaveRoom();
         setTool("none");
         setSelection(undefined);

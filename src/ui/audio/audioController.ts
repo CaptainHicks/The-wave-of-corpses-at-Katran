@@ -107,6 +107,10 @@ class AudioController {
     this.playSfx(soundEffects.uiHover, { gain: 0.58, throttleMs: 90 });
   }
 
+  playSlotTick(): void {
+    this.playSfx(soundEffects.uiHover, { gain: 0.42, throttleMs: 28 });
+  }
+
   playClick(): void {
     this.playSfx(soundEffects.uiClick, { gain: 0.8, throttleMs: 55 });
   }

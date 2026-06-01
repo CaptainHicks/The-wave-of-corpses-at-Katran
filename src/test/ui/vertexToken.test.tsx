@@ -101,4 +101,67 @@ describe("VertexToken militia lightning", () => {
     expect(container.querySelector(".building-piece")).toHaveClass("legal-building-target");
     expect(container.querySelector(".vertex-hit-area")).toHaveAttribute("r", "18");
   });
+
+  it("keeps coarse pointer vertex hit areas compact", () => {
+    const { container } = render(
+      <svg>
+        <VertexToken
+          vertex={{ ...vertex, building: undefined }}
+          legal={false}
+          expandedHitArea
+          coarsePointer
+          militia={[]}
+          players={[player]}
+          onClick={() => undefined}
+        />
+      </svg>
+    );
+
+    expect(container.querySelector(".vertex-hit-area")).toHaveAttribute("r", "20");
+    expect(container.querySelector(".vertex-touch-cue")).toHaveAttribute("r", "13");
+  });
+
+  it("shows the white dashed placement cue for desktop expanded hit areas", () => {
+    const { container } = render(
+      <svg>
+        <VertexToken
+          vertex={{ ...vertex, building: undefined }}
+          legal={false}
+          expandedHitArea
+          militia={[]}
+          players={[player]}
+          onClick={() => undefined}
+        />
+      </svg>
+    );
+
+    expect(container.querySelector(".vertex-hit-area")).toHaveAttribute("r", "18");
+    expect(container.querySelector(".vertex-touch-cue")).toHaveAttribute("r", "13");
+  });
+
+  it("uses faction-colored building pieces instead of seat-colored pieces", () => {
+    const whiteTowerPlayer: PlayerState = {
+      ...player,
+      id: "p1",
+      factionId: "white-tower",
+      color: "#8e5bb7"
+    };
+    const { container } = render(
+      <svg>
+        <VertexToken
+          vertex={vertex}
+          legal={false}
+          buildingOwner={whiteTowerPlayer}
+          militia={[]}
+          players={[whiteTowerPlayer]}
+          onClick={() => undefined}
+        />
+      </svg>
+    );
+
+    expect(container.querySelector(".building-piece")).toHaveAttribute(
+      "href",
+      "/assets/board/buildings/purple/camp.v1.webp"
+    );
+  });
 });

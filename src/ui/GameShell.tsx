@@ -1,6 +1,7 @@
 import { AlertTriangle } from "lucide-react";
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -26,6 +27,7 @@ import { getTurnUiMode } from "./selectors/turnUiMode";
 interface GameShellProps {
   state: GameState;
   error?: string;
+  ruleHint?: string;
   privacy: boolean;
   seatPlayerName: string;
   viewerPlayerId: string;
@@ -39,6 +41,7 @@ interface GameShellProps {
   animationBusy: boolean;
   onClosePrivacy: () => void;
   onDismissError: () => void;
+  onReportError?: (message: string) => void;
   onClear: () => void;
   onImportState: (state: GameState) => void;
   onLeaveOnlineRoom?: () => void;
@@ -52,6 +55,7 @@ const MIN_MAP_SCALE = 0.62;
 const MAX_MAP_SCALE = 4.2;
 const MAP_ZOOM_STEP = 0.18;
 const MAP_EDGE_GUARD_PX = 64;
+const MAP_DRAG_START_THRESHOLD_PX = 8;
 const GAME_STAGE_WIDTH = 1672;
 const GAME_STAGE_HEIGHT = 941;
 
@@ -87,9 +91,15 @@ function clampMapScale(scale: number) {
   return Math.min(MAX_MAP_SCALE, Math.max(MIN_MAP_SCALE, Number(scale.toFixed(2))));
 }
 
+function getStageScale() {
+  if (typeof window === "undefined") return 1;
+  return Math.max(0.01, Math.min(window.innerWidth / GAME_STAGE_WIDTH, window.innerHeight / GAME_STAGE_HEIGHT));
+}
+
 export function GameShell({
   state,
   error,
+  ruleHint,
   privacy,
   seatPlayerName,
   viewerPlayerId,
@@ -103,6 +113,7 @@ export function GameShell({
   animationBusy,
   onClosePrivacy,
   onDismissError,
+  onReportError,
   onClear,
   onImportState,
   onLeaveOnlineRoom,
@@ -113,8 +124,12 @@ export function GameShell({
   const mode = getTurnUiMode(state);
   const effectivePendingPlayerId = pendingPlayerId ?? state.pending?.playerId;
   const canInteract = interactionMode === "hot-seat" || viewerPlayerId === (effectivePendingPlayerId ?? state.currentPlayerId);
-  const [mapView, setMapView] = useState<MapViewState>({ scale: DEFAULT_MAP_SCALE, x: 0, y: 0 });
-  const [stageScale, setStageScale] = useState(1);
+  const [stageScale, setStageScale] = useState(getStageScale);
+  const mapViewRef = useRef<MapViewState>({
+    scale: DEFAULT_MAP_SCALE,
+    x: 0,
+    y: 0
+  });
   const [isPanning, setIsPanning] = useState(false);
   const mapLayerRef = useRef<HTMLElement | null>(null);
   const mapWorldRef = useRef<HTMLDivElement | null>(null);
@@ -122,14 +137,10 @@ export function GameShell({
   const activePointersRef = useRef<Map<number, ActiveMapPointer>>(new Map());
   const pinchStateRef = useRef<MapPinchState>();
   const suppressBoardClickRef = useRef(false);
-  const mapStyle = {
-    "--map-scale": mapView.scale,
-    "--map-pan-x": `${mapView.x}px`,
-    "--map-pan-y": `${mapView.y}px`
-  } as CSSProperties;
   const gameStageStyle = {
     "--game-stage-scale": stageScale
   } as CSSProperties;
+  const getMapView = () => mapViewRef.current;
   const getPanBounds = (scale: number) => {
     const layer = mapLayerRef.current;
     const world = mapWorldRef.current;
@@ -146,15 +157,25 @@ export function GameShell({
       y: Math.min(bounds.y, Math.max(-bounds.y, view.y))
     };
   };
+  const applyMapView = (view: MapViewState) => {
+    const nextView = constrainMapView(view);
+    mapViewRef.current = nextView;
+    const world = mapWorldRef.current;
+    if (world) {
+      world.style.setProperty("--map-scale", String(nextView.scale));
+      world.style.setProperty("--map-pan-x", `${nextView.x}px`);
+      world.style.setProperty("--map-pan-y", `${nextView.y}px`);
+    }
+    return nextView;
+  };
   const changeMapScale = (delta: number) => {
-    setMapView((view) => {
-      const nextScale = clampMapScale(view.scale + delta);
-      const scaleRatio = nextScale / view.scale;
-      return constrainMapView({
-        scale: nextScale,
-        x: view.x * scaleRatio,
-        y: view.y * scaleRatio
-      });
+    const view = getMapView();
+    const nextScale = clampMapScale(view.scale + delta);
+    const scaleRatio = nextScale / view.scale;
+    applyMapView({
+      scale: nextScale,
+      x: view.x * scaleRatio,
+      y: view.y * scaleRatio
     });
   };
   const getLayerAnchor = (clientX: number, clientY: number) => {
@@ -207,13 +228,11 @@ export function GameShell({
     const centerDeltaX = (currentCenterX - pinch.startCenterX) / stageScale;
     const centerDeltaY = (currentCenterY - pinch.startCenterY) / stageScale;
 
-    setMapView(
-      constrainMapView({
-        scale: nextScale,
-        x: centerDeltaX + pinch.startMapView.x * scaleRatio + anchor.x * (1 - scaleRatio),
-        y: centerDeltaY + pinch.startMapView.y * scaleRatio + anchor.y * (1 - scaleRatio)
-      })
-    );
+    applyMapView({
+      scale: nextScale,
+      x: centerDeltaX + pinch.startMapView.x * scaleRatio + anchor.x * (1 - scaleRatio),
+      y: centerDeltaY + pinch.startMapView.y * scaleRatio + anchor.y * (1 - scaleRatio)
+    });
   };
   const handleMapWheel = (event: WheelEvent<HTMLElement>) => {
     event.preventDefault();
@@ -229,9 +248,10 @@ export function GameShell({
       event.currentTarget.setPointerCapture(event.pointerId);
     }
     if (activePointersRef.current.size >= 2) {
-      beginPinchGesture(mapView);
+      beginPinchGesture(getMapView());
       return;
     }
+    const mapView = getMapView();
     dragStateRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -249,15 +269,17 @@ export function GameShell({
       });
     }
     if (activePointersRef.current.size >= 2) {
-      if (!pinchStateRef.current) beginPinchGesture(mapView);
+      if (!pinchStateRef.current) beginPinchGesture(getMapView());
       updatePinchGesture();
       return;
     }
     const drag = dragStateRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    const dx = (event.clientX - drag.startX) / stageScale;
-    const dy = (event.clientY - drag.startY) / stageScale;
-    if (!drag.moved && Math.hypot(dx, dy) <= 4) return;
+    const rawDx = event.clientX - drag.startX;
+    const rawDy = event.clientY - drag.startY;
+    const dx = rawDx / stageScale;
+    const dy = rawDy / stageScale;
+    if (!drag.moved && Math.hypot(rawDx, rawDy) <= MAP_DRAG_START_THRESHOLD_PX) return;
     if (!drag.moved) {
       if (!drag.moved && !event.currentTarget.hasPointerCapture(event.pointerId)) {
         event.currentTarget.setPointerCapture(event.pointerId);
@@ -266,7 +288,7 @@ export function GameShell({
       suppressBoardClickRef.current = true;
       setIsPanning(true);
     }
-    setMapView((view) => constrainMapView({ ...view, x: drag.originX + dx, y: drag.originY + dy }));
+    applyMapView({ ...getMapView(), x: drag.originX + dx, y: drag.originY + dy });
   };
   const stopMapPan = (event: PointerEvent<HTMLElement>) => {
     activePointersRef.current.delete(event.pointerId);
@@ -275,7 +297,7 @@ export function GameShell({
     }
 
     if (activePointersRef.current.size >= 2) {
-      beginPinchGesture(mapView);
+      beginPinchGesture(getMapView());
       return;
     }
 
@@ -284,6 +306,7 @@ export function GameShell({
       const remainingPointer = Array.from(activePointersRef.current.entries())[0];
       if (remainingPointer) {
         const [pointerId, pointer] = remainingPointer;
+        const mapView = getMapView();
         dragStateRef.current = {
           pointerId,
           startX: pointer.clientX,
@@ -315,10 +338,14 @@ export function GameShell({
     event.stopPropagation();
   };
 
+  useLayoutEffect(() => {
+    applyMapView(getMapView());
+  }, []);
+
   useEffect(() => {
     const handleResize = () => {
-      setStageScale(Math.max(0.01, Math.min(window.innerWidth / GAME_STAGE_WIDTH, window.innerHeight / GAME_STAGE_HEIGHT)));
-      setMapView((view) => constrainMapView(view));
+      setStageScale(getStageScale());
+      applyMapView(getMapView());
     };
     handleResize();
     window.addEventListener("resize", handleResize);
@@ -339,11 +366,20 @@ export function GameShell({
           />
         )}
 
-        {error && (
-          <div className="error-banner shell-error">
-            <AlertTriangle size={18} />
-            <span>{error}</span>
-            <button onClick={onDismissError}>{"\u5173\u95ed"}</button>
+        {(ruleHint || error) && (
+          <div className="shell-toast-stack">
+            {ruleHint && (
+              <div className="error-banner shell-rule-hint" role="status" aria-live="polite">
+                <span>{ruleHint}</span>
+              </div>
+            )}
+            {error && (
+              <div className="error-banner shell-error">
+                <AlertTriangle size={18} />
+                <span>{error}</span>
+                <button onClick={onDismissError}>{"\u5173\u95ed"}</button>
+              </div>
+            )}
           </div>
         )}
 
@@ -358,7 +394,7 @@ export function GameShell({
           onPointerCancel={stopMapPan}
           onClickCapture={handleMapClickCapture}
         >
-          <div className="map-world" ref={mapWorldRef} style={mapStyle}>
+          <div className="map-world" ref={mapWorldRef}>
             <div className="map-battlefield" aria-hidden="true" />
             <div className="map-center-zone" aria-hidden="true" />
             <div className="map-board-frame">
@@ -369,6 +405,7 @@ export function GameShell({
                 canInteract={canInteract}
                 animationEvents={animationEvents}
                 setSelection={setSelection}
+                reportError={onReportError}
                 submit={submit}
               />
             </div>

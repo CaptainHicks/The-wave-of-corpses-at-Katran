@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import type {
   OnlineEventAck,
+  RoomChooseFactionRequest,
   RoomCommandRequest,
   RoomCreateRequest,
   RoomJoinRequest,
+  RoomLeaveRequest,
   RoomResumeRequest,
   RoomStartRequest,
   RoomView
@@ -20,6 +22,17 @@ interface OnlineSessionModel {
   view?: RoomView;
 }
 
+type OnlineEventName =
+  | "room:create"
+  | "room:join"
+  | "room:resume"
+  | "room:start"
+  | "room:chooseFaction"
+  | "room:leave"
+  | "room:command";
+type OnlineEventSuccessAck = Extract<OnlineEventAck, { ok: true }>;
+type OnlineEventFailureAck = Extract<OnlineEventAck, { ok: false }>;
+
 export function useOnlineSession() {
   const [model, setModel] = useState<OnlineSessionModel>({
     busy: false,
@@ -33,7 +46,7 @@ export function useOnlineSession() {
 
     const socket = io(resolveSocketUrl(), {
       autoConnect: false,
-      transports: ["websocket", "polling"]
+      transports: ["websocket"]
     });
 
     socket.on("room:view", (view: RoomView) => {
@@ -54,8 +67,20 @@ export function useOnlineSession() {
       const savedSession = loadSavedOnlineSession();
       if (savedSession && socket.id && lastResumedSocketIdRef.current !== socket.id) {
         lastResumedSocketIdRef.current = socket.id;
-        void emitWithAck(socket, "room:resume", savedSession).then((ack) => {
-          if (!ack.ok) {
+        void emitWithAck<OnlineEventAck>(socket, "room:resume", savedSession)
+          .then((ack) => {
+            if (!ack.ok) {
+              clearOnlineSession();
+              setModel((current) => ({
+                ...current,
+                busy: false,
+                view: undefined,
+                error: ack.error
+              }));
+            }
+          })
+          .catch((error) => {
+            const ack = toFailedAck(error);
             clearOnlineSession();
             setModel((current) => ({
               ...current,
@@ -63,8 +88,7 @@ export function useOnlineSession() {
               view: undefined,
               error: ack.error
             }));
-          }
-        });
+          });
       }
     });
 
@@ -119,89 +143,116 @@ export function useOnlineSession() {
     return socket;
   }, [ensureSocket]);
 
-  const createRoom = useCallback(async (payload: RoomCreateRequest) => {
+  const runOnlineAck = useCallback(async (
+    eventName: OnlineEventName,
+    payload: unknown,
+    options: {
+      onSuccess?: (ack: OnlineEventSuccessAck) => void;
+      onFailure?: (ack: OnlineEventFailureAck) => void;
+      clearViewOnFailure?: boolean;
+    } = {}
+  ) => {
     setModel((current) => ({ ...current, busy: true, error: undefined }));
-    const socket = await connectSocket();
-    const ack = await emitWithAck(socket, "room:create", payload);
-    if (!ack.ok) {
-      setModel((current) => ({ ...current, busy: false, error: ack.error }));
+    try {
+      const socket = await connectSocket();
+      const ack = await emitWithAck<OnlineEventAck>(socket, eventName, payload);
+      if (!ack.ok) {
+        options.onFailure?.(ack);
+        setModel((current) => ({
+          ...current,
+          busy: false,
+          error: ack.error,
+          view: options.clearViewOnFailure ? undefined : current.view
+        }));
+        return ack;
+      }
+      options.onSuccess?.(ack);
+      setModel((current) => ({ ...current, busy: false, error: undefined }));
+      return ack;
+    } catch (error) {
+      const ack = toFailedAck(error);
+      options.onFailure?.(ack);
+      setModel((current) => ({
+        ...current,
+        busy: false,
+        error: ack.error,
+        view: options.clearViewOnFailure ? undefined : current.view
+      }));
       return ack;
     }
-    if (ack.sessionToken) {
-      saveOnlineSession({ roomCode: ack.roomCode, sessionToken: ack.sessionToken });
-    }
-    setModel((current) => ({ ...current, busy: false, error: undefined }));
-    return ack;
   }, [connectSocket]);
+
+  const createRoom = useCallback(async (payload: RoomCreateRequest) => {
+    return runOnlineAck("room:create", payload, {
+      onSuccess: (ack) => {
+        if (ack.sessionToken) {
+          saveOnlineSession({ roomCode: ack.roomCode, sessionToken: ack.sessionToken });
+        }
+      }
+    });
+  }, [runOnlineAck]);
 
   const joinRoom = useCallback(async (payload: RoomJoinRequest) => {
-    setModel((current) => ({ ...current, busy: true, error: undefined }));
-    const socket = await connectSocket();
-    const ack = await emitWithAck(socket, "room:join", payload);
-    if (!ack.ok) {
-      setModel((current) => ({ ...current, busy: false, error: ack.error }));
-      return ack;
-    }
-    if (ack.sessionToken) {
-      saveOnlineSession({ roomCode: ack.roomCode, sessionToken: ack.sessionToken });
-    }
-    setModel((current) => ({ ...current, busy: false, error: undefined }));
-    return ack;
-  }, [connectSocket]);
+    return runOnlineAck("room:join", payload, {
+      onSuccess: (ack) => {
+        if (ack.sessionToken) {
+          saveOnlineSession({ roomCode: ack.roomCode, sessionToken: ack.sessionToken });
+        }
+      }
+    });
+  }, [runOnlineAck]);
 
   const startRoom = useCallback(async (payload: RoomStartRequest) => {
-    setModel((current) => ({ ...current, busy: true, error: undefined }));
-    const socket = await connectSocket();
-    const ack = await emitWithAck(socket, "room:start", payload);
-    if (!ack.ok) {
-      setModel((current) => ({ ...current, busy: false, error: ack.error }));
-      return ack;
-    }
-    setModel((current) => ({ ...current, busy: false, error: undefined }));
-    return ack;
-  }, [connectSocket]);
+    return runOnlineAck("room:start", payload);
+  }, [runOnlineAck]);
+
+  const chooseFaction = useCallback(async (payload: RoomChooseFactionRequest) => {
+    return runOnlineAck("room:chooseFaction", payload);
+  }, [runOnlineAck]);
 
   const sendCommand = useCallback(async (payload: RoomCommandRequest) => {
-    setModel((current) => ({ ...current, busy: true, error: undefined }));
-    const socket = await connectSocket();
-    const ack = await emitWithAck(socket, "room:command", payload);
-    if (!ack.ok) {
-      setModel((current) => ({ ...current, busy: false, error: ack.error }));
-      return ack;
-    }
-    setModel((current) => ({ ...current, busy: false, error: undefined }));
-    return ack;
-  }, [connectSocket]);
+    return runOnlineAck("room:command", payload);
+  }, [runOnlineAck]);
 
   const resumeSavedSession = useCallback(async () => {
     const savedSession = loadSavedOnlineSession();
     if (!savedSession) return undefined;
-    setModel((current) => ({ ...current, busy: true, error: undefined }));
-    const socket = await connectSocket();
-    const ack = await emitWithAck(socket, "room:resume", savedSession as RoomResumeRequest);
-    if (!ack.ok) {
-      clearOnlineSession();
-      setModel((current) => ({ ...current, busy: false, error: ack.error, view: undefined }));
-      return ack;
-    }
-    if (ack.sessionToken) {
-      saveOnlineSession({ roomCode: ack.roomCode, sessionToken: ack.sessionToken });
-    }
-    setModel((current) => ({ ...current, busy: false, error: undefined }));
-    return ack;
-  }, [connectSocket]);
+    return runOnlineAck("room:resume", savedSession as RoomResumeRequest, {
+      clearViewOnFailure: true,
+      onFailure: () => clearOnlineSession(),
+      onSuccess: (ack) => {
+        if (ack.sessionToken) {
+          saveOnlineSession({ roomCode: ack.roomCode, sessionToken: ack.sessionToken });
+        }
+      }
+    });
+  }, [runOnlineAck]);
 
   const leaveRoom = useCallback(() => {
+    const currentView = model.view;
+    const socket = socketRef.current;
     clearOnlineSession();
     lastResumedSocketIdRef.current = undefined;
-    socketRef.current?.disconnect();
-    socketRef.current = undefined;
+    if (currentView && socket?.connected) {
+      const payload: RoomLeaveRequest = { roomCode: currentView.roomMeta.roomCode };
+      if (socketRef.current === socket) {
+        socketRef.current = undefined;
+      }
+      void emitWithAck<OnlineEventAck>(socket, "room:leave", payload)
+        .catch(() => undefined)
+        .finally(() => {
+          socket.disconnect();
+        });
+    } else {
+      socket?.disconnect();
+      socketRef.current = undefined;
+    }
     setModel({
       busy: false,
       connectionState: "disconnected",
       view: undefined
     });
-  }, []);
+  }, [model.view]);
 
   useEffect(() => {
     if (loadSavedOnlineSession()) {
@@ -228,6 +279,7 @@ export function useOnlineSession() {
     gameView,
     createRoom,
     joinRoom,
+    chooseFaction,
     startRoom,
     sendCommand,
     leaveRoom,
@@ -246,19 +298,26 @@ function resolveSocketUrl() {
   return "http://127.0.0.1:3001";
 }
 
-async function emitWithAck(
+async function emitWithAck<TAck>(
   socket: Socket,
-  eventName: "room:create" | "room:join" | "room:resume" | "room:start" | "room:command",
+  eventName: OnlineEventName,
   payload: unknown
 ) {
-  return await new Promise<OnlineEventAck>((resolve, reject) => {
+  return await new Promise<TAck>((resolve, reject) => {
     const timeoutId = window.setTimeout(() => {
       reject(new Error(`Timed out waiting for ${eventName} acknowledgement.`));
     }, 10_000);
 
-    socket.emit(eventName, payload, (ack: OnlineEventAck) => {
+    socket.emit(eventName, payload, (ack: TAck) => {
       window.clearTimeout(timeoutId);
       resolve(ack);
     });
   });
+}
+
+function toFailedAck(error: unknown): OnlineEventFailureAck {
+  return {
+    ok: false,
+    error: error instanceof Error ? error.message : "Online request failed."
+  };
 }

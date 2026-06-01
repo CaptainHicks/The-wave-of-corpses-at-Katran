@@ -5,8 +5,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { Command } from "../../domain/types";
-import { FileRoomStore } from "../../../server/rooms/fileRoomStore";
-import type { StoredOnlineRoom } from "../../../server/rooms/types";
+import { FileRoomStore } from "../../../server/rooms/fileRoomStore.ts";
+import type { StoredOnlineRoom } from "../../../server/rooms/types.ts";
 
 const tempDirs: string[] = [];
 

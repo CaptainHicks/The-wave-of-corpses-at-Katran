@@ -19,6 +19,8 @@ export function VertexToken({
   buildingOwner,
   previewBuildingOwner,
   previewBuildingType,
+  expandedHitArea,
+  coarsePointer,
   militia,
   players,
   onClick
@@ -28,6 +30,8 @@ export function VertexToken({
   buildingOwner?: PlayerState;
   previewBuildingOwner?: PlayerState;
   previewBuildingType?: BuildingType;
+  expandedHitArea?: boolean;
+  coarsePointer?: boolean;
   militia: Militia[];
   players: PlayerState[];
   onClick: () => void;
@@ -40,6 +44,8 @@ export function VertexToken({
     vertex.building && buildingOwner
       ? getBuildingPieceAsset({
           playerId: buildingOwner.id,
+          factionId: buildingOwner.factionId,
+          color: buildingOwner.color,
           buildingType: vertex.building.type,
           hasWatchtower: hasOwnerWatchtower,
           militiaCount
@@ -49,6 +55,8 @@ export function VertexToken({
     !vertex.building && legal && previewBuildingOwner && previewBuildingType
       ? getBuildingPieceAsset({
           playerId: previewBuildingOwner.id,
+          factionId: previewBuildingOwner.factionId,
+          color: previewBuildingOwner.color,
           buildingType: previewBuildingType,
           hasWatchtower: false,
           militiaCount: 0
@@ -58,6 +66,10 @@ export function VertexToken({
     vertex.building && BUILDING_PIECE_BOX[vertex.building.type][hasOwnerWatchtower ? "watchtower" : "plain"];
   const previewPieceBox = previewBuildingType ? BUILDING_PIECE_BOX[previewBuildingType].plain : undefined;
   const hasPreviewBuilding = Boolean(previewBuildingAsset && previewPieceBox);
+  const hasExpandedHitArea = Boolean(expandedHitArea && !vertex.building && !hasPreviewBuilding);
+  const targetHitRadius = coarsePointer ? 20 : 18;
+  const touchCueRadius = 13;
+  const emptyHitRadius = coarsePointer ? 6 : 5;
   const lightningHeight = pieceBox ? Math.max(12, Math.min(17, pieceBox.height * 0.36)) : 0;
   const lightningWidth = lightningHeight * (112 / 192);
   const lightningTop = pieceBox ? vertex.y - pieceBox.height * 0.62 - lightningHeight * 0.48 : vertex.y;
@@ -66,7 +78,7 @@ export function VertexToken({
     <g
       className={`vertex ${vertex.building ? "has-building" : ""} ${
         hasPreviewBuilding ? "has-building-preview" : ""
-      } ${legal ? "legal" : ""}`}
+      } ${hasExpandedHitArea ? "has-expanded-hit-area" : ""} ${coarsePointer ? "has-coarse-hit-area" : ""} ${legal ? "legal" : ""}`}
       data-vertex-id={vertex.id}
       onClick={(event: MouseEvent<SVGGElement>) => {
         event.stopPropagation();
@@ -74,11 +86,14 @@ export function VertexToken({
       }}
     >
       <circle
-        className={`vertex-hit-area ${hasPreviewBuilding ? "preview-hit-area" : ""}`}
+        className={`vertex-hit-area ${hasPreviewBuilding || hasExpandedHitArea ? "preview-hit-area" : ""}`}
         cx={vertex.x}
         cy={vertex.y}
-        r={vertex.building || hasPreviewBuilding ? 18 : 5}
+        r={vertex.building || hasPreviewBuilding || hasExpandedHitArea ? targetHitRadius : emptyHitRadius}
       />
+      {hasExpandedHitArea && (
+        <circle className="vertex-touch-cue" cx={vertex.x} cy={vertex.y} r={touchCueRadius} />
+      )}
       {previewBuildingAsset && previewPieceBox && (
         <image
           href={previewBuildingAsset}

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://static.cloudbase.net/cli/cloudbaserc.schema.json",
+  "version": "2.0",
+  "envId": "zombie-catan-d8g07asiy5e3f05c1",
+  "app": {
+    "serviceName": "zombie-catan-wasteland-web",
+    "root": ".",
+    "framework": "vite",
+    "installCommand": "npm install",
+    "buildCommand": "npm run build:client",
+    "outputDir": "dist",
+    "deployPath": "/",
+    "envVariables": {
+      "VITE_SOCKET_URL": "{{env.VITE_SOCKET_URL}}"
+    },
+    "ignore": [
+      ".git",
+      "node_modules",
+      "server-dist",
+      "data",
+      "output",
+      "test-results",
+      "docs/plans",
+      ".playwright-mcp"
+    ]
+  },
+  "cloudrun": {
+    "name": "zombie-catan-wasteland-api"
+  }
+}

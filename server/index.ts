@@ -5,37 +5,52 @@ import express from "express";
 import { Server as SocketIoServer } from "socket.io";
 import type {
   OnlineEventAck,
+  RoomChooseFactionRequest,
   RoomCommandRequest,
   RoomCreateRequest,
   RoomJoinRequest,
+  RoomLeaveRequest,
   RoomResumeRequest,
   RoomStartRequest
 } from "../src/online/protocol";
 import { buildLobbyView, buildOnlineGameView } from "../src/online/protocol";
-import { FileRoomStore } from "./rooms/fileRoomStore";
+import { createCorsOriginMatcher, resolveAllowedCorsOrigins, resolveRoomStoreDriver } from "./config";
+import { getCloudBaseRuntimeInfo } from "./rooms/cloudBaseRoomStore";
+import { createRoomStore } from "./rooms/createRoomStore";
 import { OnlineRoomError, OnlineRoomService } from "./rooms/onlineRoomService";
 import type { StoredOnlineRoom } from "./rooms/types";
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[server] Unhandled rejection", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("[server] Uncaught exception", error);
+});
 
 const PORT = Number(process.env.PORT ?? 3001);
 const DIST_DIR = path.resolve(process.cwd(), "dist");
 const DIST_ASSETS_DIR = path.join(DIST_DIR, "assets");
-const PERSIST_ROOT = path.resolve(
-  process.env.ROOMS_DATA_DIR ?? process.env.RAILWAY_VOLUME_MOUNT_PATH ?? path.resolve(process.cwd(), "data")
-);
+const PERSIST_ROOT = path.resolve(process.env.ROOMS_DATA_DIR ?? path.resolve(process.cwd(), "data"));
 const AUDIO_DIR = path.join(PERSIST_ROOT, "audio");
-const ROOMS_DIR = path.join(PERSIST_ROOT, "rooms");
+const ROOM_STORE_DRIVER = resolveRoomStoreDriver();
 
-const store = new FileRoomStore({ rootDir: ROOMS_DIR });
+const store = createRoomStore();
 const roomService = new OnlineRoomService({ store });
 const app = express();
 
 app.get("/health", (_request, response) => {
-  response.json({ ok: true });
+  response.json({
+    ok: true,
+    roomStoreDriver: ROOM_STORE_DRIVER,
+    allowedCorsOrigins: resolveAllowedCorsOrigins(),
+    ...(ROOM_STORE_DRIVER === "cloudbase" ? { cloudbase: getCloudBaseRuntimeInfo() } : {})
+  });
 });
 
 if (existsSync(DIST_DIR)) {
   if (existsSync(AUDIO_DIR)) {
-    // Prefer original audio files stored on the mounted volume over the slim deployment bundle.
+    // Prefer audio files from the persistent data directory when they are available.
     app.use(
       "/assets/audio",
       express.static(AUDIO_DIR, {
@@ -104,7 +119,7 @@ if (existsSync(DIST_DIR)) {
 const server = http.createServer(app);
 const io = new SocketIoServer(server, {
   cors: {
-    origin: true,
+    origin: createCorsOriginMatcher(),
     credentials: true
   }
 });
@@ -188,6 +203,28 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("room:chooseFaction", async (payload: RoomChooseFactionRequest, ack?: (result: OnlineEventAck) => void) => {
+    try {
+      const session = socketSessions.get(socket.id);
+      if (!session || session.roomCode !== payload.roomCode) {
+        throw new OnlineRoomError("Join or resume the room before choosing a faction.");
+      }
+      const room = await roomService.chooseFaction({
+        roomCode: payload.roomCode,
+        playerId: session.playerId,
+        factionId: payload.factionId
+      });
+      await emitRoomViews(room);
+      ack?.({
+        ok: true,
+        roomCode: room.roomCode,
+        viewerPlayerId: session.playerId
+      });
+    } catch (error) {
+      ack?.(toAckError(error));
+    }
+  });
+
   socket.on("room:command", async (payload: RoomCommandRequest, ack?: (result: OnlineEventAck) => void) => {
     try {
       const session = socketSessions.get(socket.id);
@@ -203,6 +240,31 @@ io.on("connection", (socket) => {
       ack?.({
         ok: true,
         roomCode: room.roomCode,
+        viewerPlayerId: session.playerId
+      });
+    } catch (error) {
+      ack?.(toAckError(error));
+    }
+  });
+
+  socket.on("room:leave", async (payload: RoomLeaveRequest, ack?: (result: OnlineEventAck) => void) => {
+    try {
+      const session = socketSessions.get(socket.id);
+      if (!session || session.roomCode !== payload.roomCode) {
+        throw new OnlineRoomError("Join or resume the room before leaving it.");
+      }
+      const room = await roomService.leaveRoom({
+        roomCode: payload.roomCode,
+        playerId: session.playerId
+      });
+      detachPlayerSockets(payload.roomCode, session.playerId);
+      socket.leave(payload.roomCode);
+      if (room) {
+        await emitRoomViews(room);
+      }
+      ack?.({
+        ok: true,
+        roomCode: payload.roomCode,
         viewerPlayerId: session.playerId
       });
     } catch (error) {
@@ -294,6 +356,17 @@ function detachSocket(socketId: string) {
   if (sockets.size === 0) {
     socketsByPlayerKey.delete(key);
   }
+}
+
+function detachPlayerSockets(roomCode: string, playerId: string) {
+  const key = playerKey(roomCode, playerId);
+  const sockets = socketsByPlayerKey.get(key);
+  if (!sockets) return;
+  for (const socketId of sockets) {
+    socketSessions.delete(socketId);
+    io.sockets.sockets.get(socketId)?.leave(roomCode);
+  }
+  socketsByPlayerKey.delete(key);
 }
 
 function playerKey(roomCode: string, playerId: string) {

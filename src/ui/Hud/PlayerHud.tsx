@@ -53,11 +53,12 @@ export function PlayerHud({
               key={player.id}
               style={{ "--player-color": player.color } as CSSProperties}
             >
-              <div className={isCurrent ? "faction-portrait turn-glow" : "faction-portrait"}>
+              <div className="faction-portrait">
                 <img src={faction.portrait} alt={`${player.name}头像`} />
               </div>
               <div className="player-nameplate">
                 <strong>{player.name}</strong>
+                {isCurrent && <span className="current-player-signal" aria-hidden="true" />}
               </div>
               <button
                 type="button"

@@ -88,4 +88,16 @@ describe("authorizeCommandForPlayer", () => {
     });
     expectRejected(state, "p1", { type: "debugJumpPhase", phase: "victory" });
   });
+
+  it("rejects forced dice values in online play", () => {
+    let state = applyCommand(undefined, {
+      type: "createGame",
+      players: players(),
+      seed: "online-forced-dice"
+    });
+    state = applyCommand(state, { type: "debugJumpPhase", phase: "dice" });
+
+    expectAuthorized(state, "p1", { type: "rollDice" });
+    expectRejected(state, "p1", { type: "rollDice", forced: [6, 6] });
+  });
 });

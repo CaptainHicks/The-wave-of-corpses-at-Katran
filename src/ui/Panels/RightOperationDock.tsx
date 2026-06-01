@@ -21,7 +21,7 @@ const ACTION_TABS: Array<{ id: ActionTab; label: string }> = [
   { id: "trade", label: "交易" },
   { id: "build", label: "建造" },
   { id: "militia", label: "民兵" },
-  { id: "development", label: "买发展卡" }
+  { id: "development", label: "发展" }
 ];
 
 export function RightOperationDock({
@@ -114,18 +114,13 @@ export function RightOperationDock({
       </div>
 
       {canInteract && mode !== "pending" && (
-        <SelectionPanel
-          state={state}
-          selection={selection}
-          setSelection={setSelection}
-          submit={submit}
-        />
+        <SelectionPanel state={state} selection={selection} setSelection={setSelection} submit={submit} />
       )}
 
       {canInteract && mode === "pending" && <PendingPanel key={panelRefreshKey} state={state} submit={submit} setTool={setTool} />}
       {canInteract && mode === "mustRoll" && <DiceAction key={panelRefreshKey} state={state} submit={submit} />}
-      {mode === "victory" && <VictoryPanel key={panelRefreshKey} state={state} />}
-      {canInteract && mode === "freeAction" && state.phase === "setup" && <SetupAction key={panelRefreshKey} tool={tool} setTool={setTool} />}
+      {mode === "victory" && <VictoryPanel state={state} />}
+      {canInteract && mode === "freeAction" && state.phase === "setup" && <SetupAction tool={tool} setTool={setTool} />}
       {canInteract && mode === "freeAction" && state.phase !== "setup" && state.phase !== "action" && (
         <section className="panel action-card">
           <h2>战局处理中</h2>
@@ -158,13 +153,7 @@ export function RightOperationDock({
           </div>
           {activeTab === "trade" && <TradeAction key={panelRefreshKey} state={state} submit={submit} />}
           {activeTab === "build" && (
-            <BuildAction
-              key={panelRefreshKey}
-              state={state}
-              tool={tool}
-              setTool={setTool}
-              setSelection={setSelection}
-            />
+            <BuildAction key={panelRefreshKey} state={state} tool={tool} setTool={setTool} setSelection={setSelection} />
           )}
           {activeTab === "militia" && (
             <MilitiaAction
@@ -184,60 +173,67 @@ export function RightOperationDock({
         mode={mode}
         animationBusy={animationBusy}
         interactionLocked={!canInteract && interactionMode === "online" && mode !== "victory"}
-        lockedSubtitle={`${waitingPlayer?.name ?? "鍏朵粬鐜╁"} 姝ｅ湪琛屽姩`}
+        lockedSubtitle={`${waitingPlayer?.name ?? "其他玩家"} 正在行动`}
         submit={submit}
       />
 
-      {showBuildCost && createPortal(
-        <div
-          className="build-cost-modal-layer"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setShowBuildCost(false);
-          }}
-        >
-          <BuildCostPanel onClose={() => setShowBuildCost(false)} />
-        </div>,
-        document.body
-      )}
+      {showBuildCost &&
+        createPortal(
+          <div
+            className="build-cost-modal-layer"
+            role="presentation"
+            onPointerDown={(event) => {
+              if (event.target === event.currentTarget) setShowBuildCost(false);
+            }}
+          >
+            <BuildCostPanel onClose={() => setShowBuildCost(false)} />
+          </div>,
+          document.body
+        )}
 
-      {showSystemMenu && createPortal(
-        <div
-          className="system-menu-modal-layer"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setShowSystemMenu(false);
-          }}
-        >
-          <section className="themed-modal system-menu-modal" role="dialog" aria-modal="true" aria-labelledby="system-menu-title">
-            <header className="system-menu-header">
-              <div>
-                <span className="system-menu-kicker">系统</span>
-                <h2 id="system-menu-title">系统菜单</h2>
-              </div>
-              <button type="button" className="icon-button modal-close-button" aria-label="关闭系统菜单" onClick={() => setShowSystemMenu(false)}>
-                <X size={18} />
-              </button>
-            </header>
-            {interactionMode === "online" && onlineRoomCode && onlineConnectionState && onLeaveOnlineRoom ? (
-              <OnlineRoomPanel
-                roomCode={onlineRoomCode}
-                connectionState={onlineConnectionState}
-                onLeaveRoom={onLeaveOnlineRoom}
-              />
-            ) : (
-              <PersistencePanel
-                state={state}
-                onClear={onClear}
-                onImportState={onImportState}
-                submit={submit}
-                setTool={setTool}
-              />
-            )}
-          </section>
-        </div>,
-        document.body
-      )}
+      {showSystemMenu &&
+        createPortal(
+          <div
+            className="system-menu-modal-layer"
+            role="presentation"
+            onPointerDown={(event) => {
+              if (event.target === event.currentTarget) setShowSystemMenu(false);
+            }}
+          >
+            <section className="themed-modal system-menu-modal" role="dialog" aria-modal="true" aria-labelledby="system-menu-title">
+              <header className="system-menu-header">
+                <div>
+                  <span className="system-menu-kicker">系统</span>
+                  <h2 id="system-menu-title">系统菜单</h2>
+                </div>
+                <button
+                  type="button"
+                  className="icon-button modal-close-button"
+                  aria-label="关闭系统菜单"
+                  onClick={() => setShowSystemMenu(false)}
+                >
+                  <X size={18} />
+                </button>
+              </header>
+              {interactionMode === "online" && onlineRoomCode && onlineConnectionState && onLeaveOnlineRoom ? (
+                <OnlineRoomPanel
+                  roomCode={onlineRoomCode}
+                  connectionState={onlineConnectionState}
+                  onLeaveRoom={onLeaveOnlineRoom}
+                />
+              ) : (
+                <PersistencePanel
+                  state={state}
+                  onClear={onClear}
+                  onImportState={onImportState}
+                  submit={submit}
+                  setTool={setTool}
+                />
+              )}
+            </section>
+          </div>,
+          document.body
+        )}
     </aside>
   );
 }

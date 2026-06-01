@@ -15,8 +15,6 @@ export interface LobbyRoomMetaSnapshot extends RoomMetaSnapshot {
 
 export interface RoomCreateRequest {
   name: string;
-  color: string;
-  factionId?: string;
   targetPlayerCount: number;
   fogEnabled: boolean;
 }
@@ -24,7 +22,10 @@ export interface RoomCreateRequest {
 export interface RoomJoinRequest {
   roomCode: string;
   name: string;
-  color: string;
+}
+
+export interface RoomChooseFactionRequest {
+  roomCode: string;
   factionId?: string;
 }
 
@@ -34,6 +35,10 @@ export interface RoomResumeRequest {
 }
 
 export interface RoomStartRequest {
+  roomCode: string;
+}
+
+export interface RoomLeaveRequest {
   roomCode: string;
 }
 
@@ -140,6 +145,7 @@ export interface LobbyView {
   roomMeta: LobbyRoomMetaSnapshot;
   seats: LobbySeatView[];
   canStart: boolean;
+  startBlockedReason?: string;
 }
 
 export type RoomView = LobbyView | OnlineGameView;
@@ -197,19 +203,50 @@ export function buildLobbyView(
   }>,
   viewerPlayerId: string
 ): LobbyView {
+  const roomFilled = seats.length === roomMeta.targetPlayerCount;
+  const allFactionsChosen = seats.every((seat) => Boolean(seat.factionId));
+  const roomReady = roomFilled && allFactionsChosen;
+  const isHost = viewerPlayerId === roomMeta.hostPlayerId;
+
   return {
     kind: "lobby",
     viewerPlayerId,
     roomMeta,
-    seats: seats.map((seat) => ({
-      playerId: seat.playerId,
-      name: seat.name,
-      color: seat.color,
-      factionId: seat.factionId,
-      connected: seat.connected
-    })),
-    canStart: viewerPlayerId === roomMeta.hostPlayerId && seats.length === roomMeta.targetPlayerCount
+    seats: buildLobbySeatViews(seats),
+    canStart: isHost && roomReady,
+    startBlockedReason: isHost
+      ? roomFilled
+        ? allFactionsChosen
+          ? undefined
+          : "所有玩家都选择阵营后，房主才能开始游戏。"
+        : "房间满员后，房主才能开始游戏。"
+      : "只有房主可以开始游戏。"
   };
+}
+
+function buildLobbySeatViews(
+  seats: Array<{
+    playerId: string;
+    name: string;
+    color: string;
+    factionId?: string;
+    connected: boolean;
+  }>
+): LobbySeatView[] {
+  return seats.map((seat) => ({
+    playerId: seat.playerId,
+    name: seat.name,
+    color: seat.color,
+    factionId: seat.factionId,
+    connected: seat.connected
+  }));
+}
+
+function resolveJoinBlockedReason(roomMeta: LobbyRoomMetaSnapshot, seatCount: number) {
+  if (roomMeta.status === "active") return "该房间已经开局，不能再加入。";
+  if (roomMeta.status === "finished") return "该房间已经结束。";
+  if (seatCount >= roomMeta.targetPlayerCount) return "该房间已满。";
+  return undefined;
 }
 
 function buildPublicPlayer(

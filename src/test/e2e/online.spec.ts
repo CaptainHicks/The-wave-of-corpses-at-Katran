@@ -1,31 +1,39 @@
 import { expect, test } from "@playwright/test";
 
-test("creates, starts, and resumes an online room", async ({ browser }) => {
+test("creates, joins, chooses factions in lobby, starts, and resumes an online room", async ({ browser }) => {
   const hostPage = await browser.newPage();
   const guestPage = await browser.newPage();
 
   await hostPage.goto("/");
   await hostPage.getByRole("button", { name: "开始游戏" }).click();
   await hostPage.getByRole("button", { name: "在线联机" }).click();
+  await hostPage.getByRole("button", { name: "创建房间" }).click();
   await hostPage.getByLabel("在线玩家名称").fill("房主A");
   await hostPage.getByRole("button", { name: "创建在线房间" }).click();
 
-  const roomTitle = hostPage.getByRole("heading", { name: /房间 / });
-  await expect(roomTitle).toBeVisible();
-  const roomText = await roomTitle.textContent();
-  const roomCodeMatch = roomText?.match(/房间\s+([A-Z0-9]+)/);
+  await expect(hostPage.getByRole("heading", { name: "房间大厅" })).toBeVisible();
+  const copyRoomCodeButton = hostPage.getByRole("button", { name: /复制房间码/ });
+  const roomCodeLabel = await copyRoomCodeButton.getAttribute("aria-label");
+  const roomCodeMatch = roomCodeLabel?.match(/复制房间码\s+([A-Z0-9]+)/);
   expect(roomCodeMatch?.[1]).toBeTruthy();
   const roomCode = roomCodeMatch![1];
+
+  await hostPage.getByLabel("在线大厅阵营").selectOption("red-rust");
 
   await guestPage.goto("/");
   await guestPage.getByRole("button", { name: "开始游戏" }).click();
   await guestPage.getByRole("button", { name: "在线联机" }).click();
-  await guestPage.getByLabel("在线玩家名称").fill("玩家B");
-  await guestPage.getByLabel("在线玩家阵营").selectOption({ index: 1 });
-  await guestPage.getByLabel("在线房间码").fill(roomCode);
+  await guestPage.getByRole("button", { name: "加入房间" }).click();
+  await guestPage.getByLabel("在线加入玩家名称").fill("玩家B");
+  for (const [index, digit] of [...roomCode].entries()) {
+    await guestPage.getByLabel(`房间码第${index + 1}位`).fill(digit);
+  }
   await guestPage.getByRole("button", { name: "加入在线房间" }).click();
 
-  await expect(hostPage.getByText(/当前 2\/2 人/)).toBeVisible();
+  await expect(guestPage.getByRole("heading", { name: "房间大厅" })).toBeVisible();
+  await guestPage.getByLabel("在线大厅阵营").selectOption("blue-steel");
+
+  await expect(hostPage.getByRole("heading", { name: /玩家列表\s+\(2\/2\)/ })).toBeVisible();
   await expect(guestPage.getByRole("button", { name: "房主开始游戏" })).toBeDisabled();
 
   await hostPage.getByRole("button", { name: "房主开始游戏" }).click();

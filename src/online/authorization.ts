@@ -14,6 +14,10 @@ export function authorizeCommandForPlayer(state: GameState, viewerPlayerId: stri
     throw new OnlineAuthorizationError("Debug and local-only commands are disabled in online mode.");
   }
 
+  if (command.type === "rollDice" && command.forced != null) {
+    throw new OnlineAuthorizationError("Forced dice rolls are disabled in online mode.");
+  }
+
   const viewer = state.players.find((player) => player.id === viewerPlayerId);
   if (!viewer) {
     throw new OnlineAuthorizationError("Viewer is not part of this room.");

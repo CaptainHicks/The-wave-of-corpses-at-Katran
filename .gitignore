@@ -4,14 +4,7 @@ server-dist/
 output/
 test-results/
 .playwright-mcp/
-.fly/
-.railway-deploy/
-.railway-release/
-.railway-release-noaudio/
-.railway-ssh/
 data/
-verify-untar/
-release-*.tgz
 *.tar.gz
 tmp/
 *.log
