@@ -41,7 +41,6 @@ function renderGameShell() {
       onClosePrivacy={vi.fn()}
       onDismissError={vi.fn()}
       onClear={vi.fn()}
-      onImportState={vi.fn()}
       submit={vi.fn()}
       setTool={vi.fn()}
       setSelection={vi.fn()}

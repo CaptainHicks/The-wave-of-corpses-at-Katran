@@ -1,7 +1,6 @@
 import { Music, RotateCcw, Volume2 } from "lucide-react";
 import type { CSSProperties } from "react";
 import { useEffect, useState } from "react";
-import type { AudioSettings } from "./audioSettings";
 import { DEFAULT_AUDIO_SETTINGS } from "./audioSettings";
 import { useAudioSettings } from "./useAudio";
 
@@ -27,6 +26,8 @@ const AUDIO_VOLUME_CONTROLS = [
   }
 ] as const;
 
+type AudioVolumeKey = (typeof AUDIO_VOLUME_CONTROLS)[number]["key"];
+
 export function AudioSettingsPanel({ className = "", deferApply = false, showActions = false, onApply }: AudioSettingsPanelProps) {
   const { settings, updateSettings } = useAudioSettings();
   const [draftSettings, setDraftSettings] = useState(settings);
@@ -37,13 +38,13 @@ export function AudioSettingsPanel({ className = "", deferApply = false, showAct
 
   const visibleSettings = deferApply ? draftSettings : settings;
 
-  const handleVolumeChange = (key: keyof AudioSettings, value: number) => {
+  const handleVolumeChange = (key: AudioVolumeKey, value: number) => {
     if (deferApply) {
-      setDraftSettings((currentSettings) => ({ ...currentSettings, [key]: value }));
+      setDraftSettings((currentSettings) => ({ ...currentSettings, [key]: value, muted: false }));
       return;
     }
 
-    updateSettings({ [key]: value });
+    updateSettings({ [key]: value, muted: false });
   };
 
   const handleReset = () => {

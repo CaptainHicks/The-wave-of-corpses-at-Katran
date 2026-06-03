@@ -24,8 +24,8 @@ export const settlementMusic = {
 } as const;
 
 export const soundEffects = {
-  zombieMove: `${SFX_BASE}/zombie_attack_claw.wav`,
-  zombieCrowd: `${SFX_BASE}/zombie_crowd.wav`,
-  uiHover: `${SFX_BASE}/ui_click_s.wav`,
-  uiClick: `${SFX_BASE}/ui_click.wav`
+  zombieMove: `${SFX_BASE}/zombie_attack_claw.ogg`,
+  zombieCrowd: `${SFX_BASE}/zombie_crowd.ogg`,
+  uiHover: `${SFX_BASE}/ui_click_s.ogg`,
+  uiClick: `${SFX_BASE}/ui_click.ogg`
 } as const;

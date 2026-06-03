@@ -105,33 +105,109 @@ export const GAME_ART_PRELOAD_URLS = uniqueUrls([
 ]);
 
 const warmedImages = new Map<string, HTMLImageElement>();
+const warmedImageLoads = new Map<string, Promise<boolean>>();
 let preloadStarted = false;
+let criticalPreloadPromise: Promise<GameArtPreloadResult> | undefined;
+let criticalPreloadResult: GameArtPreloadResult | undefined;
 
-export function preloadGameArtAssets() {
-  if (preloadStarted || typeof window === "undefined" || typeof Image === "undefined") return;
+const CRITICAL_IMAGE_TIMEOUT_MS = 15000;
+
+export interface GameArtPreloadResult {
+  total: number;
+  loaded: number;
+  failed: number;
+  complete: boolean;
+}
+
+export function preloadGameArtAssets(): Promise<GameArtPreloadResult> {
+  const criticalPromise = preloadCriticalGameArtAssets();
+  if (preloadStarted || !hasImagePreloadRuntime()) return criticalPromise;
   preloadStarted = true;
 
-  warmImageUrls(GAME_ART_CRITICAL_PRELOAD_URLS);
   scheduleIdleWarmup(() => {
     const criticalUrls = new Set(GAME_ART_CRITICAL_PRELOAD_URLS);
-    warmImageUrls(GAME_ART_PRELOAD_URLS.filter((url) => !criticalUrls.has(url)));
+    void warmImageUrls(GAME_ART_PRELOAD_URLS.filter((url) => !criticalUrls.has(url)), "low");
   });
+  return criticalPromise;
 }
 
-function warmImageUrls(urls: string[]) {
-  urls.forEach((url) => warmImageUrl(url));
+export function preloadCriticalGameArtAssets(): Promise<GameArtPreloadResult> {
+  if (!hasImagePreloadRuntime()) {
+    return Promise.resolve({
+      total: GAME_ART_CRITICAL_PRELOAD_URLS.length,
+      loaded: GAME_ART_CRITICAL_PRELOAD_URLS.length,
+      failed: 0,
+      complete: true
+    });
+  }
+
+  criticalPreloadPromise ??= warmImageUrls(GAME_ART_CRITICAL_PRELOAD_URLS, "high").then((loadedStates) => {
+    const loaded = loadedStates.filter(Boolean).length;
+    criticalPreloadResult = {
+      total: loadedStates.length,
+      loaded,
+      failed: loadedStates.length - loaded,
+      complete: true
+    };
+    return criticalPreloadResult;
+  });
+  return criticalPreloadPromise;
 }
 
-function warmImageUrl(url: string) {
-  if (warmedImages.has(url)) return;
+export function isCriticalGameArtPreloadComplete(): boolean {
+  return !hasImagePreloadRuntime() || Boolean(criticalPreloadResult?.complete);
+}
+
+function warmImageUrls(urls: string[], fetchPriority: "high" | "low" | "auto" = "auto") {
+  return Promise.all(urls.map((url) => warmImageUrl(url, fetchPriority)));
+}
+
+function warmImageUrl(url: string, fetchPriority: "high" | "low" | "auto" = "auto"): Promise<boolean> {
+  const existingLoad = warmedImageLoads.get(url);
+  if (existingLoad) return existingLoad;
+
   const image = new Image();
   image.decoding = "async";
   image.loading = "eager";
-  image.src = url;
+  (image as HTMLImageElement & { fetchPriority?: "high" | "low" | "auto" }).fetchPriority = fetchPriority;
   warmedImages.set(url, image);
-  if (typeof image.decode === "function") {
-    void image.decode().catch(() => undefined);
-  }
+
+  const load = new Promise<boolean>((resolve) => {
+    let settled = false;
+    const finish = (loaded: boolean) => {
+      if (settled) return;
+      settled = true;
+      image.onload = null;
+      image.onerror = null;
+      window.clearTimeout(timeoutId);
+      resolve(loaded);
+    };
+    const decodeThenFinish = () => {
+      if (typeof image.decode !== "function") {
+        finish(true);
+        return;
+      }
+      image.decode().then(() => finish(true)).catch(() => finish(true));
+    };
+    const timeoutId = window.setTimeout(() => finish(false), CRITICAL_IMAGE_TIMEOUT_MS);
+
+    image.onload = decodeThenFinish;
+    image.onerror = () => finish(false);
+    image.src = url;
+
+    if (image.complete) {
+      window.queueMicrotask(() => {
+        if (image.naturalWidth > 0) {
+          decodeThenFinish();
+        } else {
+          finish(false);
+        }
+      });
+    }
+  });
+
+  warmedImageLoads.set(url, load);
+  return load;
 }
 
 function scheduleIdleWarmup(callback: () => void) {
@@ -147,4 +223,12 @@ function scheduleIdleWarmup(callback: () => void) {
   }
 
   window.setTimeout(callback, 0);
+}
+
+function hasImagePreloadRuntime() {
+  return (
+    typeof window !== "undefined" &&
+    typeof Image !== "undefined" &&
+    !(typeof navigator !== "undefined" && navigator.userAgent.toLowerCase().includes("jsdom"))
+  );
 }

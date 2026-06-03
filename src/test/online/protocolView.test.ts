@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createResources } from "../../domain/constants";
 import { applyCommand } from "../../domain/rules";
 import type { Command, GameState } from "../../domain/types";
-import { buildOnlineGameView } from "../../online/protocol";
+import { buildOnlineGameView, buildOnlineGameViews } from "../../online/protocol";
 
 function players(count = 3) {
   return Array.from({ length: count }, (_, index) => ({
@@ -89,6 +89,7 @@ describe("buildOnlineGameView", () => {
       resourceCount: 5,
       devCardCount: 2
     });
+    expect(view.publicState.devDeckCount).toBe(state.devDeck.length);
   });
 
   it("sanitizes pending details and hidden cards for spectators", () => {
@@ -118,5 +119,28 @@ describe("buildOnlineGameView", () => {
     expect(view.publicState.players.find((player) => player.id === "p2")?.revealedDevCards).toEqual([
       { id: "target-revealed", type: "secretBase", purchasedTurn: 1, revealed: true }
     ]);
+  });
+
+  it("batch-builds per-viewer game views without changing private state visibility", () => {
+    const state = createPendingTradeState();
+    const roomMeta = {
+      roomCode: "ROOM-BATCH",
+      hostPlayerId: "p1",
+      status: "active",
+      connectedPlayerIds: ["p1", "p2", "p3"]
+    } as const;
+    const lastCommand: Command = { type: "endTurn" };
+
+    const views = buildOnlineGameViews(roomMeta, state, ["p1", "p2", "p3"], lastCommand);
+    const p1View = views.find((view) => view.viewerPlayerId === "p1")!;
+    const p2View = views.find((view) => view.viewerPlayerId === "p2")!;
+    const singleP2View = buildOnlineGameView(roomMeta, state, "p2", lastCommand);
+
+    expect(views).toHaveLength(3);
+    expect(p2View).toEqual(singleP2View);
+    expect(p1View.viewerPrivate.resources).toEqual(state.players[0].resources);
+    expect(p2View.viewerPrivate.resources).toEqual(state.players[1].resources);
+    expect(p1View.publicState.players).toEqual(p2View.publicState.players);
+    expect(p1View.lastCommand).toEqual(lastCommand);
   });
 });

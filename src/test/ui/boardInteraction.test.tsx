@@ -2,6 +2,7 @@ import { fireEvent, render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { createResources } from "../../domain/constants";
 import {
+  isResourceTile,
   vertexHasAdjacentBuilding,
   vertexTouchesInitialResourceZone,
   vertexTouchesOnlyRevealed,
@@ -12,12 +13,14 @@ import {
   applyCommand,
   legalBuildEdges,
   legalBuildVertices,
+  legalConvoyMoveFromEdges,
+  legalConvoyMoveToEdges,
   legalInitialCampVertices,
   legalInitialRouteEdges,
   legalMerchantTiles,
   legalRecruitVertices
 } from "../../domain/rules";
-import type { GameState } from "../../domain/types";
+import type { BoardState, GameState, TileState } from "../../domain/types";
 import { getBuildingPieceAsset, routePieceAssets } from "../../ui/art/assetManifest";
 import { BoardView, describeInitialCampResourceZone } from "../../ui/Board/BoardView";
 import type { UiSelection, UiTool } from "../../ui/gameUiTypes";
@@ -82,7 +85,87 @@ function findLargeZoneBlockedInitialVertex(state: GameState) {
   );
 }
 
+function resourceTile(id: string, q: number, r: number, x: number, cluster: TileState["cluster"]): TileState {
+  return {
+    id,
+    row: r,
+    col: q,
+    q,
+    r,
+    x,
+    y: 0,
+    type: "farm",
+    hiddenType: "farm",
+    number: 6,
+    revealed: true,
+    cluster
+  };
+}
+
+function boardWithTiles(tiles: TileState[]): BoardState {
+  return {
+    tiles: Object.fromEntries(tiles.map((tile) => [tile.id, tile])),
+    edges: {},
+    vertices: {},
+    rows: []
+  };
+}
+
+function createInitialZoneBlockedCase() {
+  const state = applyCommand(undefined, {
+    type: "createGame",
+    players: players(),
+    seed: "initial-zone-blocked-hint"
+  });
+  const smallResourceTile = Object.values(state.board.tiles).find(
+    (tile) => tile.cluster === "small" && isResourceTile(tile) && tile.hiddenType !== "warehouse"
+  );
+  expect(smallResourceTile).toBeTruthy();
+
+  const blockedVertex = {
+    id: "test-blocked-small-zone-vertex",
+    x: smallResourceTile!.x,
+    y: smallResourceTile!.y,
+    tileIds: [smallResourceTile!.id],
+    edgeIds: []
+  };
+
+  const nextState: GameState = {
+    ...state,
+    board: {
+      ...state.board,
+      tiles: {
+        ...state.board.tiles,
+        [smallResourceTile!.id]: {
+          ...smallResourceTile!,
+          revealed: true
+        }
+      },
+      vertices: {
+        ...state.board.vertices,
+        [blockedVertex.id]: blockedVertex
+      }
+    }
+  };
+
+  return {
+    state: nextState,
+    vertexId: blockedVertex.id,
+    label: describeInitialCampResourceZone(nextState.board)
+  };
+}
+
 describe("BoardView interaction targets", () => {
+  it("does not expose native SVG title tooltips on tile art", () => {
+    const state = applyCommand(undefined, { type: "createGame", players: players(), seed: "tile-title-tooltip" });
+    const { container } = renderBoard(state, "none");
+    const tile = container.querySelector(".tile-group");
+
+    expect(tile).toBeTruthy();
+    expect(tile).toHaveAttribute("aria-label");
+    expect(tile?.querySelector("title")).toBeNull();
+  });
+
   it("removes visible camp previews during initial setup while keeping a larger hit area", () => {
     const state = applyCommand(undefined, { type: "createGame", players: players(), seed: "initial-camp-markers" });
     const legalVertices = legalInitialCampVertices(state);
@@ -113,36 +196,34 @@ describe("BoardView interaction targets", () => {
   });
 
   it("classifies large resource zones by map side and uses that label in the setup hint", () => {
-    const expectedLabels = new Set(["左侧大资源区", "右侧大资源区", "左右两侧的大资源区", "中部大资源区"]);
-    const foundLabels = new Set<string>();
-    let blockedCase: { state: GameState; vertexId: string; label: string } | undefined;
+    expect(describeInitialCampResourceZone(boardWithTiles([
+      resourceTile("large-left", 0, 0, 0, "large"),
+      resourceTile("small-right", 4, 0, 100, "small")
+    ]))).toBe("左侧大资源区");
+    expect(describeInitialCampResourceZone(boardWithTiles([
+      resourceTile("small-left", 0, 0, 0, "small"),
+      resourceTile("large-right", 4, 0, 100, "large")
+    ]))).toBe("右侧大资源区");
+    expect(describeInitialCampResourceZone(boardWithTiles([
+      resourceTile("large-left", 0, 0, 0, "large"),
+      resourceTile("large-right", 4, 0, 100, "large")
+    ]))).toBe("左右两侧的大资源区");
+    expect(describeInitialCampResourceZone(boardWithTiles([
+      resourceTile("small-left", 0, 0, 0, "small"),
+      resourceTile("large-center", 2, 0, 50, "large"),
+      resourceTile("small-right", 4, 0, 100, "small")
+    ]))).toBe("中部大资源区");
 
-    for (let index = 0; index < 260; index += 1) {
-      const state = applyCommand(undefined, {
-        type: "createGame",
-        players: players(),
-        seed: `setup-zone-hint-${index}`
-      });
-      const label = describeInitialCampResourceZone(state.board);
-      if (expectedLabels.has(label)) {
-        foundLabels.add(label);
-      }
-      if (!blockedCase) {
-        const blockedVertex = findLargeZoneBlockedInitialVertex(state);
-        if (blockedVertex) {
-          blockedCase = { state, vertexId: blockedVertex.id, label };
-        }
-      }
-    }
+    const blockedCase = createInitialZoneBlockedCase();
+    expect(legalInitialCampVertices(blockedCase.state)).not.toContain(blockedCase.vertexId);
+    expect(vertexTouchesResource(blockedCase.state.board, blockedCase.vertexId, true)).toBe(true);
+    expect(vertexTouchesInitialResourceZone(blockedCase.state.board, blockedCase.vertexId)).toBe(false);
 
-    expect(foundLabels).toEqual(expectedLabels);
-    expect(blockedCase).toBeTruthy();
-
-    const { container, submit, reportError } = renderBoard(blockedCase!.state, "none");
-    fireEvent.click(container.querySelector(`[data-vertex-id="${blockedCase!.vertexId}"]`)!);
+    const { container, submit, reportError } = renderBoard(blockedCase.state, "none");
+    fireEvent.click(container.querySelector(`[data-vertex-id="${blockedCase.vertexId}"]`)!);
 
     expect(submit).not.toHaveBeenCalled();
-    expect(reportError).toHaveBeenCalledWith(`初始营地只能放在${blockedCase!.label}。`);
+    expect(reportError).toHaveBeenCalledWith(`初始营地只能放在${blockedCase.label}。`);
   });
 
   it("uses the camp piece asset as the legal camp target preview", () => {
@@ -200,6 +281,55 @@ describe("BoardView interaction targets", () => {
     expect(preview).toHaveAttribute("href", routePieceAssets[state.currentPlayerId].transport);
   });
 
+  it("shows the latest white-edge animation when selecting a convoy to move", () => {
+    let state = setupActionState("move-convoy-source-preview");
+    const sourceEdgeId = legalBuildEdges(state, "convoy")[0];
+    expect(sourceEdgeId).toBeTruthy();
+    state = applyCommand(state, { type: "buildRoute", edgeId: sourceEdgeId, routeType: "convoy", free: true });
+    expect(legalConvoyMoveFromEdges(state)).toContain(sourceEdgeId);
+
+    const { container } = renderBoard(state, "none", vi.fn(), { kind: "moveConvoy" });
+    const sourceEdge = container.querySelector(`[data-edge-id="${sourceEdgeId}"]`);
+
+    expect(sourceEdge?.querySelector(".route-piece-legal-outline")).toBeInTheDocument();
+    expect(sourceEdge?.querySelector(".route-piece-highlight")).not.toBeInTheDocument();
+  });
+
+  it("uses a convoy piece preview for legal move destinations", () => {
+    let state = setupActionState("move-convoy-target-preview");
+    const sourceEdgeId = legalBuildEdges(state, "convoy")[0];
+    expect(sourceEdgeId).toBeTruthy();
+    state = applyCommand(state, { type: "buildRoute", edgeId: sourceEdgeId, routeType: "convoy", free: true });
+    const targetEdgeId = legalConvoyMoveToEdges(state, sourceEdgeId)[0];
+    expect(targetEdgeId).toBeTruthy();
+
+    const { container } = renderBoard(state, "none", vi.fn(), { kind: "moveConvoy", fromEdgeId: sourceEdgeId });
+    const targetEdge = container.querySelector(`[data-edge-id="${targetEdgeId}"]`);
+    const preview = targetEdge?.querySelector(".route-piece-preview");
+
+    expect(preview).toHaveAttribute("href", routePieceAssets[state.currentPlayerId].convoy);
+    expect(targetEdge).not.toHaveClass("edge");
+  });
+
+  it("cancels convoy move selection when clicking empty board space", () => {
+    const state = setupActionState("cancel-move-convoy-on-empty-board");
+    const setSelection = vi.fn();
+    const { container } = render(
+      <BoardView
+        state={state}
+        tool="none"
+        selection={{ kind: "moveConvoy" }}
+        animationEvents={[]}
+        setSelection={setSelection}
+        submit={vi.fn()}
+      />
+    );
+
+    fireEvent.click(container.querySelector(".board-svg")!);
+
+    expect(setSelection).toHaveBeenCalledWith(undefined);
+  });
+
   it("explains why an illegal transport route target cannot be used", () => {
     const state = setupActionState("illegal-route-target");
     const legalEdges = new Set(legalBuildEdges(state, "transport"));
@@ -252,6 +382,38 @@ describe("BoardView interaction targets", () => {
     );
     expect(tile.querySelector(".tile-outline")).not.toHaveClass("legal-tile-target");
     expect(tileArt).not.toHaveClass("legal-tile-art-target");
+  });
+
+  it("queues two militia mobilization placements before playing the card", () => {
+    const state = setupActionState("dev-militia-two-placements");
+    const vertexId = legalRecruitVertices(state)[0];
+    expect(vertexId).toBeTruthy();
+    const selection: UiSelection = { kind: "devMilitia", cardId: "militia-card", vertexIds: [] };
+    const { container, rerender, setSelection, submit, reportError } = renderBoard(state, "none", vi.fn(), selection);
+
+    fireEvent.click(container.querySelector(`[data-vertex-id="${vertexId}"]`)!);
+
+    expect(setSelection).toHaveBeenCalledWith({ ...selection, vertexIds: [vertexId] });
+
+    rerender(
+      <BoardView
+        state={state}
+        tool="none"
+        selection={{ ...selection, vertexIds: [vertexId] }}
+        animationEvents={[]}
+        setSelection={setSelection}
+        reportError={reportError}
+        submit={submit}
+      />
+    );
+
+    fireEvent.click(container.querySelector(`[data-vertex-id="${vertexId}"]`)!);
+
+    expect(submit).toHaveBeenCalledWith({
+      type: "playDevelopmentCard",
+      cardId: "militia-card",
+      payload: { vertexIds: [vertexId, vertexId] }
+    });
   });
 
   it("activates a militia by clicking its building on the map", () => {

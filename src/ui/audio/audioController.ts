@@ -7,6 +7,16 @@ type MusicMode = "menu" | "gameplay" | "settlement-clear" | "settlement-over";
 
 const MUSIC_CHANNEL_KEY = "__zombieCatanMusicChannel";
 const MUSIC_UNLOAD_STOPPER_KEY = "__zombieCatanMusicUnloadStopper";
+const HTML_SFX_POOL_SIZE = 6;
+
+type BufferedSfxKey = keyof typeof soundEffects;
+
+type SfxPlaybackOptions = {
+  gain?: number;
+  throttleMs?: number;
+  delayMs?: number;
+  throttleKey?: string;
+};
 
 function hasAudioRuntime(): boolean {
   return (
@@ -60,20 +70,30 @@ function nextPlaylistIndex(currentIndex: number, playlistLength: number): number
 class AudioController {
   private readonly enabled = hasAudioRuntime();
   private readonly music?: HTMLAudioElement;
+  private unlocked = false;
   private currentMode?: MusicMode;
   private musicTracks: string[] = [];
   private musicIndex = 0;
   private sfxLastPlayed = new Map<string, number>();
+  private sfxElements = new Map<BufferedSfxKey, HTMLAudioElement[]>();
+  private sfxElementIndex = new Map<BufferedSfxKey, number>();
+  private sfxContext?: AudioContext;
+  private sfxBuffers = new Map<BufferedSfxKey, AudioBuffer>();
+  private sfxBufferLoads = new Map<BufferedSfxKey, Promise<void>>();
   private settings: AudioSettings = loadAudioSettings();
 
   constructor() {
     if (!this.enabled) return;
     this.music = getSharedMusicChannel();
     this.bindMusicEnded();
+    this.prepareHtmlSfxElements();
   }
 
   unlock(): void {
     if (!this.enabled) return;
+    this.unlocked = true;
+    this.resumeSfxContext();
+    this.scheduleSfxWarmup();
     this.playMusic();
   }
 
@@ -104,23 +124,23 @@ class AudioController {
   }
 
   playHover(): void {
-    this.playSfx(soundEffects.uiHover, { gain: 0.58, throttleMs: 90 });
+    this.playBufferedSfx("uiHover", { gain: 0.8, throttleMs: 90 });
   }
 
   playSlotTick(): void {
-    this.playSfx(soundEffects.uiHover, { gain: 0.42, throttleMs: 28 });
+    this.playBufferedSfx("uiHover", { gain: 0.7, throttleKey: "slotTick" });
   }
 
   playClick(): void {
-    this.playSfx(soundEffects.uiClick, { gain: 0.8, throttleMs: 55 });
+    this.playBufferedSfx("uiClick", { gain: 1, throttleMs: 55 });
   }
 
   playAnimationEvents(events: GameAnimationInput[]): void {
     if (events.some((event) => event.kind === "zombieMove")) {
-      this.playSfx(soundEffects.zombieMove, { gain: 1, throttleMs: 240 });
+      this.playBufferedSfx("zombieMove", { gain: 1, throttleMs: 240 });
     }
     if (events.some((event) => event.kind === "zombieTrackAdvance" && (event.amount ?? 0) < 0)) {
-      this.playSfx(soundEffects.zombieCrowd, { gain: 1.25, throttleMs: 600, delayMs: 160 });
+      this.playBufferedSfx("zombieCrowd", { gain: 1.25, throttleMs: 600, delayMs: 160 });
     }
   }
 
@@ -160,34 +180,168 @@ class AudioController {
 
   private applyMusicVolume(): void {
     if (!this.music) return;
-    this.music.volume = this.settings.musicVolume / 100;
+    this.music.volume = this.settings.muted ? 0 : this.settings.musicVolume / 100;
   }
 
-  private playSfx(
-    src: string,
-    options: { gain?: number; throttleMs?: number; delayMs?: number } = {}
-  ): void {
+  private playBufferedSfx(key: BufferedSfxKey, options: SfxPlaybackOptions = {}): void {
     if (!this.enabled) return;
 
-    const play = () => {
-      const now = performance.now();
-      const throttleMs = options.throttleMs ?? 0;
-      const lastPlayed = this.sfxLastPlayed.get(src) ?? 0;
-      if (now - lastPlayed < throttleMs) return;
-      this.sfxLastPlayed.set(src, now);
-
-      const audio = new Audio(src);
-      audio.preload = "auto";
-      audio.volume = Math.min(1, Math.max(0, (this.settings.sfxVolume / 100) * (options.gain ?? 1)));
-      const result = audio.play();
-      if (result) result.catch(() => undefined);
-    };
-
     if (options.delayMs && options.delayMs > 0) {
-      window.setTimeout(play, options.delayMs);
+      window.setTimeout(() => {
+        void this.playBufferedSfxNow(key, options);
+      }, options.delayMs);
     } else {
-      play();
+      void this.playBufferedSfxNow(key, options);
     }
+  }
+
+  private async playBufferedSfxNow(key: BufferedSfxKey, options: SfxPlaybackOptions): Promise<void> {
+    const volume = this.effectiveSfxVolume(options.gain ?? 1);
+    if (volume <= 0) return;
+
+    const now = performance.now();
+    const throttleMs = options.throttleMs ?? 0;
+    const throttleKey = options.throttleKey ?? key;
+    const lastPlayed = this.sfxLastPlayed.get(throttleKey) ?? Number.NEGATIVE_INFINITY;
+    if (now - lastPlayed < throttleMs) return;
+    this.sfxLastPlayed.set(throttleKey, now);
+
+    if (!this.unlocked) {
+      this.playHtmlSfx(key, volume);
+      return;
+    }
+
+    const context = this.getSfxContext();
+    if (!context) {
+      this.playHtmlSfx(key, volume);
+      return;
+    }
+
+    let buffer = this.sfxBuffers.get(key);
+    if (!buffer) {
+      this.playHtmlSfx(key, volume);
+      void this.primeSfxBuffer(key);
+      return;
+    }
+
+    if (!this.isSfxContextRunning(context)) {
+      await this.resumeSfxContext();
+      if (!this.isSfxContextRunning(context)) {
+        this.playHtmlSfx(key, volume);
+        return;
+      }
+    }
+
+    this.startBufferedSfx(context, buffer, volume);
+  }
+
+  private startBufferedSfx(context: AudioContext, buffer: AudioBuffer, volume: number): void {
+    const source = context.createBufferSource();
+    const gain = context.createGain();
+    source.buffer = buffer;
+    gain.gain.value = volume;
+    source.connect(gain);
+    gain.connect(context.destination);
+    source.onended = () => {
+      source.disconnect();
+      gain.disconnect();
+    };
+    source.start(context.currentTime);
+  }
+
+  private effectiveSfxVolume(gainScale: number): number {
+    return this.settings.muted ? 0 : Math.min(1, Math.max(0, (this.settings.sfxVolume / 100) * gainScale));
+  }
+
+  private getSfxContext(): AudioContext | undefined {
+    if (this.sfxContext) return this.sfxContext;
+    const AudioContextCtor =
+      window.AudioContext ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextCtor) return undefined;
+    this.sfxContext = new AudioContextCtor();
+    return this.sfxContext;
+  }
+
+  private resumeSfxContext(): Promise<void> {
+    const context = this.getSfxContext();
+    if (!context || context.state === "running") return Promise.resolve();
+    return context.resume().catch(() => undefined);
+  }
+
+  private isSfxContextRunning(context: AudioContext): boolean {
+    return context.state === "running";
+  }
+
+  private primeSfxBuffers(): void {
+    (Object.keys(soundEffects) as BufferedSfxKey[]).forEach((key) => {
+      void this.primeSfxBuffer(key);
+    });
+  }
+
+  private scheduleSfxWarmup(): void {
+    const warmup = () => this.primeSfxBuffers();
+    const requestIdle = (
+      window as Window & {
+        requestIdleCallback?: (handler: () => void, options?: { timeout?: number }) => number;
+      }
+    ).requestIdleCallback;
+
+    if (requestIdle) {
+      requestIdle(warmup, { timeout: 2500 });
+      return;
+    }
+
+    window.setTimeout(warmup, 1200);
+  }
+
+  private prepareHtmlSfxElements(): void {
+    (Object.keys(soundEffects) as BufferedSfxKey[]).forEach((key) => {
+      const elements = Array.from({ length: HTML_SFX_POOL_SIZE }, () => {
+        const element = new Audio(soundEffects[key]);
+        element.preload = "none";
+        return element;
+      });
+      this.sfxElements.set(key, elements);
+      this.sfxElementIndex.set(key, 0);
+    });
+  }
+
+  private playHtmlSfx(key: BufferedSfxKey, volume: number): void {
+    const elements = this.sfxElements.get(key);
+    if (!elements || elements.length === 0) return;
+    const index = this.sfxElementIndex.get(key) ?? 0;
+    const element = elements[index % elements.length];
+    if (!element) return;
+    this.sfxElementIndex.set(key, (index + 1) % elements.length);
+    element.volume = volume;
+    try {
+      element.currentTime = 0;
+    } catch {
+      element.load();
+    }
+    const result = element.play();
+    if (result) result.catch(() => undefined);
+  }
+
+  private primeSfxBuffer(key: BufferedSfxKey): Promise<void> {
+    if (this.sfxBuffers.has(key)) return Promise.resolve();
+    const existing = this.sfxBufferLoads.get(key);
+    if (existing) return existing;
+    const context = this.getSfxContext();
+    if (!context) return Promise.resolve();
+
+    const load = fetch(soundEffects[key])
+      .then((response) => response.arrayBuffer())
+      .then((data) => context.decodeAudioData(data))
+      .then((buffer) => {
+        this.sfxBuffers.set(key, buffer);
+      })
+      .catch(() => undefined)
+      .then(() => {
+        this.sfxBufferLoads.delete(key);
+      });
+    this.sfxBufferLoads.set(key, load);
+    return load;
   }
 }
 

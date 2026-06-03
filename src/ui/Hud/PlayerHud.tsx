@@ -40,7 +40,6 @@ export function PlayerHud({
           const isCurrent = player.id === state.currentPlayerId;
           const isPending = player.id === pendingPlayerId;
           const supplyLength = longestSupplyLength(state.board, player.id);
-          const militiaTotal = player.militia.length + player.pieces.militia;
           const faction =
             PLAYER_FACTIONS.find((item) => item.id === player.factionId) ??
             PLAYER_FACTIONS[index % PLAYER_FACTIONS.length];
@@ -72,7 +71,7 @@ export function PlayerHud({
                 <HudStat icon={HUD_ICONS.camp} label="营地" value={camps} />
                 <HudStat icon={HUD_ICONS.fortress} label="堡垒" value={fortresses} />
                 <HudStat icon={HUD_ICONS.watchtower} label="哨塔" value={watchtowers} />
-                <HudStat icon={HUD_ICONS.militia} label="民兵" value={`${player.militia.length}/${militiaTotal}`} />
+                <HudStat icon={HUD_ICONS.militia} label="民兵" value={player.militia.length} />
                 <HudStat icon={HUD_ICONS.longestSupply} label="最长补给线" value={supplyLength} wide />
               </div>
             </div>
@@ -184,6 +183,7 @@ function scoreBreakdownRows(score: ScoreBreakdown) {
     },
     { label: "秘密据点", detail: `${score.secretBases} 张已公开`, points: score.secretBases },
     { label: "卡坦保卫者", detail: `${score.defenderTokens} 枚得分牌`, points: score.defenderTokens },
+    { label: "新资源区", detail: `${score.newResourceZones} 个首次营地奖励`, points: score.newResourceZones },
     {
       label: "商人",
       detail: score.merchant > 0 ? "当前控制商人" : "未控制商人",

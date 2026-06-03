@@ -181,7 +181,10 @@ export function DevCard({
           <span className="card-face-fallback">{asset.fallbackLabel}</span>
         )}
       </span>
-      <strong className="card-count">{count}</strong>
+      <span className="dev-card-owned-count" aria-label={`持有 ${count} 张${DEV_CARD_LABELS[card.type]}`}>
+        <span className="dev-card-owned-count__label">持有</span>
+        <strong className="dev-card-owned-count__value">×{count}</strong>
+      </span>
     </article>
   );
 }

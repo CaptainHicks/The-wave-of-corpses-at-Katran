@@ -56,7 +56,7 @@ export function HexTile({
   const merchantCenterX = hasZombie || shouldShowNumber ? tile.x + 17 : tile.x;
 
   return (
-    <g onClick={onClick} className="tile-group" data-tile-id={tile.id}>
+    <g onClick={onClick} className="tile-group" data-tile-id={tile.id} aria-label={asset.alt}>
       {asset.imageUrl && (
         <defs>
           <clipPath id={imageClipId}>
@@ -76,6 +76,7 @@ export function HexTile({
             preserveAspectRatio="none"
             clipPath={`url(#${imageClipId})`}
             className="tile-art"
+            aria-hidden="true"
           />
         </>
       )}
@@ -84,7 +85,6 @@ export function HexTile({
         className={asset.imageUrl ? `${tileClassName} tile-outline` : tileClassName}
         style={asset.imageUrl ? outlineStyle : style}
       />
-      <title>{asset.alt}</title>
       {visibleNumber !== undefined && <TileNumberToken x={numberX} y={tile.y} number={visibleNumber} />}
       {hasZombie && (
         <image

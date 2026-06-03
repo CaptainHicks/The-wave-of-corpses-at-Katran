@@ -23,7 +23,7 @@ function player(overrides: Partial<PlayerState> = {}): PlayerState {
       fortresses: 4,
       transports: 15,
       convoys: 8,
-      militia: 9,
+      militia: 12,
       watchtowers: 4
     },
     usedDevCardThisTurn: false,
@@ -85,6 +85,14 @@ describe("PlayerHud", () => {
     expect(cards[1]).toHaveClass("current-turn");
     expect(cards[1]?.querySelector(".faction-portrait")).not.toHaveClass("turn-glow");
     expect(cards[1]?.querySelector(".current-player-signal")).toBeInTheDocument();
+  });
+
+  it("shows militia as the deployed count without a piece-pool fraction", () => {
+    const { container } = render(<PlayerHud state={scoringState()} />);
+    const statusText = container.querySelector(".public-stat-grid")?.textContent ?? "";
+
+    expect(statusText).toContain("民兵3");
+    expect(statusText).not.toMatch(/民兵\d+\/\d+/);
   });
 
   it("opens a score breakdown dialog from the score badge", () => {

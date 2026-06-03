@@ -112,6 +112,7 @@ export interface PublicOnlineGameState {
   awards: GameState["awards"];
   dice?: [number, number];
   winnerId?: string;
+  devDeckCount: number;
   players: PublicOnlinePlayerState[];
   pending?: PublicPendingState;
 }
@@ -156,32 +157,59 @@ export function buildOnlineGameView(
   viewerPlayerId: string,
   lastCommand?: Command
 ): OnlineGameView {
+  return buildOnlineGameViewFromPublicState(buildPublicOnlineGameState(roomMeta, state), roomMeta, state, viewerPlayerId, lastCommand);
+}
+
+export function buildOnlineGameViews(
+  roomMeta: RoomMetaSnapshot,
+  state: GameState,
+  viewerPlayerIds: string[],
+  lastCommand?: Command
+): OnlineGameView[] {
+  const publicState = buildPublicOnlineGameState(roomMeta, state);
+  return viewerPlayerIds.map((viewerPlayerId) =>
+    buildOnlineGameViewFromPublicState(publicState, roomMeta, state, viewerPlayerId, lastCommand)
+  );
+}
+
+export function buildPublicOnlineGameState(roomMeta: RoomMetaSnapshot, state: GameState): PublicOnlineGameState {
+  return {
+    debugMode: state.debugMode,
+    fogEnabled: state.fogEnabled,
+    currentPlayerId: state.currentPlayerId,
+    phase: state.phase,
+    board: state.board,
+    zombieTrack: state.zombieTrack,
+    zombieTileId: state.zombieTileId,
+    merchant: state.merchant,
+    log: state.log,
+    turn: state.turn,
+    setup: state.setup,
+    awards: state.awards,
+    dice: state.dice,
+    winnerId: state.winnerId,
+    devDeckCount: state.devDeck.length,
+    players: buildPublicPlayers(state, roomMeta.connectedPlayerIds),
+    pending: sanitizePendingForPublic(state.pending)
+  };
+}
+
+function buildOnlineGameViewFromPublicState(
+  publicState: PublicOnlineGameState,
+  roomMeta: RoomMetaSnapshot,
+  state: GameState,
+  viewerPlayerId: string,
+  lastCommand?: Command
+): OnlineGameView {
   const viewer = state.players.find((player) => player.id === viewerPlayerId);
   if (!viewer) {
-    throw new Error(`Viewer ${viewerPlayerId} does not belong to this game.`);
+    throw new Error(`玩家 ${viewerPlayerId} 不属于这局游戏。`);
   }
 
   return {
     kind: "game",
     viewerPlayerId,
-    publicState: {
-      debugMode: state.debugMode,
-      fogEnabled: state.fogEnabled,
-      currentPlayerId: state.currentPlayerId,
-      phase: state.phase,
-      board: state.board,
-      zombieTrack: state.zombieTrack,
-      zombieTileId: state.zombieTileId,
-      merchant: state.merchant,
-      log: state.log,
-      turn: state.turn,
-      setup: state.setup,
-      awards: state.awards,
-      dice: state.dice,
-      winnerId: state.winnerId,
-      players: state.players.map((player) => buildPublicPlayer(player, state, roomMeta.connectedPlayerIds)),
-      pending: sanitizePendingForPublic(state.pending)
-    },
+    publicState,
     viewerPrivate: {
       resources: viewer.resources,
       devCards: viewer.devCards,
@@ -251,8 +279,8 @@ function resolveJoinBlockedReason(roomMeta: LobbyRoomMetaSnapshot, seatCount: nu
 
 function buildPublicPlayer(
   player: PlayerState,
-  state: GameState,
-  connectedPlayerIds: string[]
+  connectedPlayerIds: string[],
+  score: number
 ): PublicOnlinePlayerState {
   return {
     id: player.id,
@@ -264,12 +292,17 @@ function buildPublicPlayer(
     movedConvoyThisTurn: player.movedConvoyThisTurn,
     pieces: player.pieces,
     usedDevCardThisTurn: player.usedDevCardThisTurn,
-    score: calculateScore(state, player.id).total,
+    score,
     resourceCount: resourceTotal(player.resources),
     devCardCount: player.devCards.length,
     revealedDevCards: player.devCards.filter((card) => card.revealed),
     connected: connectedPlayerIds.includes(player.id)
   };
+}
+
+function buildPublicPlayers(state: GameState, connectedPlayerIds: string[]): PublicOnlinePlayerState[] {
+  const scores = new Map(state.players.map((player) => [player.id, calculateScore(state, player.id).total]));
+  return state.players.map((player) => buildPublicPlayer(player, connectedPlayerIds, scores.get(player.id) ?? 0));
 }
 
 function sanitizePendingForPublic(pending?: PendingChoice): PublicPendingState | undefined {

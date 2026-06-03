@@ -71,6 +71,7 @@ describe("materializeOnlineGameState", () => {
     expect(materialized.players.find((player) => player.id === "p1")?.devCards).toEqual([
       { id: "p1-open", type: "secretBase", purchasedTurn: 1, revealed: true }
     ]);
+    expect(materialized.devDeck).toHaveLength(state.devDeck.length);
     expect(materialized.pending).toMatchObject({
       kind: "confirmTrade",
       playerId: "p2",

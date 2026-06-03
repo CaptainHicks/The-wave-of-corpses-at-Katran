@@ -59,10 +59,10 @@ export class OnlineRoomService {
     return this.withRoomLock(input.roomCode, async (transaction) => {
       const room = await this.getRoomOrThrowFrom(transaction, input.roomCode);
       if (room.status !== "lobby") {
-        throw new OnlineRoomError("This room is no longer accepting players.");
+        throw new OnlineRoomError("这个房间已经不能加入了。");
       }
       if (room.seats.length >= room.targetPlayerCount) {
-        throw new OnlineRoomError("This room is already full.");
+        throw new OnlineRoomError("这个房间已经满员了。");
       }
 
       const timestamp = this.now();
@@ -85,24 +85,24 @@ export class OnlineRoomService {
     return this.withRoomLock(input.roomCode, async (transaction) => {
       const room = await this.getRoomOrThrowFrom(transaction, input.roomCode);
       if (room.status !== "lobby") {
-        throw new OnlineRoomError("Factions can only be changed while the room is in the lobby.");
+        throw new OnlineRoomError("只有在房间大厅里才能更换阵营。");
       }
 
       const seat = room.seats.find((entry) => entry.playerId === input.playerId);
       if (!seat) {
-        throw new OnlineRoomError("Player seat not found in this room.");
+        throw new OnlineRoomError("没有在这个房间里找到你的玩家席位。");
       }
 
       if (input.factionId) {
         const faction = PLAYER_FACTIONS.find((entry) => entry.id === input.factionId);
         if (!faction) {
-          throw new OnlineRoomError("Unknown faction.");
+          throw new OnlineRoomError("未知阵营。");
         }
         const takenByOtherPlayer = room.seats.some(
           (entry) => entry.playerId !== input.playerId && entry.factionId === input.factionId
         );
         if (takenByOtherPlayer) {
-          throw new OnlineRoomError("That faction has already been chosen by another player.");
+          throw new OnlineRoomError("这个阵营已经被其他玩家选择了。");
         }
       }
 
@@ -133,16 +133,16 @@ export class OnlineRoomService {
     return this.withRoomLock(input.roomCode, async (transaction) => {
       const room = await this.getRoomOrThrowFrom(transaction, input.roomCode);
       if (room.status !== "lobby") {
-        throw new OnlineRoomError("This room has already started.");
+        throw new OnlineRoomError("这个房间已经开始游戏了。");
       }
       if (room.hostPlayerId !== input.viewerPlayerId) {
-        throw new OnlineRoomError("Only the host can start the room.");
+        throw new OnlineRoomError("只有房主可以开始游戏。");
       }
       if (room.seats.length !== room.targetPlayerCount) {
-        throw new OnlineRoomError("The room must be full before the host can start the game.");
+        throw new OnlineRoomError("房间满员后，房主才能开始游戏。");
       }
       if (room.seats.some((seat) => !seat.factionId)) {
-        throw new OnlineRoomError("Every player must choose a faction before the host can start the game.");
+        throw new OnlineRoomError("所有玩家都选择阵营后，房主才能开始游戏。");
       }
 
       const timestamp = this.now();
@@ -176,7 +176,7 @@ export class OnlineRoomService {
     return this.withRoomLock(input.roomCode, async (transaction) => {
       const room = await this.getRoomOrThrowFrom(transaction, input.roomCode);
       if (room.status !== "active" || !room.gameState) {
-        throw new OnlineRoomError("This room is not in an active game.");
+        throw new OnlineRoomError("这个房间当前不在游戏中。");
       }
 
       try {
@@ -280,7 +280,7 @@ export class OnlineRoomService {
       const existing = await this.store.loadRoom(roomCode);
       if (!existing) return roomCode;
     }
-    throw new OnlineRoomError("Failed to allocate a unique room code.");
+    throw new OnlineRoomError("房间码生成失败，请稍后重试。");
   }
 
   private createSeat(
@@ -290,7 +290,7 @@ export class OnlineRoomService {
   ): StoredRoomSeat {
     const name = input.name.trim();
     if (!name) {
-      throw new OnlineRoomError("Player name is required.");
+      throw new OnlineRoomError("请输入玩家名称。");
     }
 
     return {
@@ -308,7 +308,7 @@ export class OnlineRoomService {
   private async getRoomOrThrow(roomCode: string) {
     const room = await this.store.loadRoom(roomCode);
     if (!room) {
-      throw new OnlineRoomError("Room not found.");
+      throw new OnlineRoomError("没有找到这个房间。");
     }
     return room;
   }
@@ -316,7 +316,7 @@ export class OnlineRoomService {
   private async getRoomOrThrowFrom(transaction: RoomStoreTransaction, roomCode: string) {
     const room = await transaction.loadRoom();
     if (!room) {
-      throw new OnlineRoomError("Room not found.");
+      throw new OnlineRoomError("没有找到这个房间。");
     }
     return room;
   }
@@ -362,7 +362,7 @@ function resolveSeatColor(factionId?: string) {
 
 function assertTargetPlayerCount(targetPlayerCount: number) {
   if (targetPlayerCount < 2 || targetPlayerCount > 6) {
-    throw new OnlineRoomError("Online rooms support 2 to 6 players.");
+    throw new OnlineRoomError("在线房间支持 2 到 6 名玩家。");
   }
 }
 

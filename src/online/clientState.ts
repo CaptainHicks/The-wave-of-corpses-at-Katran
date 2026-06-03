@@ -1,5 +1,5 @@
 import { createResources } from "../domain/constants";
-import type { GameState, PlayerState } from "../domain/types";
+import type { DevCard, GameState, PlayerState } from "../domain/types";
 import type { OnlineGameView } from "./protocol";
 
 export function materializeOnlineGameState(view: OnlineGameView): GameState {
@@ -12,7 +12,7 @@ export function materializeOnlineGameState(view: OnlineGameView): GameState {
     zombieTrack: view.publicState.zombieTrack,
     zombieTileId: view.publicState.zombieTileId,
     merchant: view.publicState.merchant,
-    devDeck: [],
+    devDeck: createRedactedDevDeck(view.publicState.devDeckCount),
     log: view.publicState.log,
     rng: { seed: `online-${view.roomMeta.roomCode}`, counter: view.publicState.turn },
     turn: view.publicState.turn,
@@ -67,4 +67,12 @@ function materializePlayer(viewerSafePlayer: OnlineGameView["publicState"]["play
     pieces: viewerSafePlayer.pieces,
     usedDevCardThisTurn: viewerSafePlayer.usedDevCardThisTurn
   };
+}
+
+function createRedactedDevDeck(count: number): DevCard[] {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `online-redacted-dev-${index}`,
+    type: "airdrop",
+    purchasedTurn: -1
+  }));
 }

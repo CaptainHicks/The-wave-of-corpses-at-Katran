@@ -13,7 +13,7 @@ import type {
   RoomResumeRequest,
   RoomStartRequest
 } from "../src/online/protocol";
-import { buildLobbyView, buildOnlineGameView } from "../src/online/protocol";
+import { buildLobbyView, buildOnlineGameViews } from "../src/online/protocol";
 import { createCorsOriginMatcher, resolveAllowedCorsOrigins, resolveRoomStoreDriver } from "./config";
 import { getCloudBaseRuntimeInfo } from "./rooms/cloudBaseRoomStore";
 import { createRoomStore } from "./rooms/createRoomStore";
@@ -166,7 +166,7 @@ io.on("connection", (socket) => {
     try {
       const resumed = await roomService.resumeSession(payload);
       if (!resumed) {
-        throw new OnlineRoomError("Saved session not found.");
+        throw new OnlineRoomError("没有找到可恢复的联机房间。");
       }
       attachSocket(socket.id, resumed.room.roomCode, resumed.seat.playerId);
       socket.join(resumed.room.roomCode);
@@ -186,7 +186,7 @@ io.on("connection", (socket) => {
     try {
       const session = socketSessions.get(socket.id);
       if (!session || session.roomCode !== payload.roomCode) {
-        throw new OnlineRoomError("Join or resume the room before starting it.");
+        throw new OnlineRoomError("请先加入或恢复房间，再开始游戏。");
       }
       const room = await roomService.startRoom({
         roomCode: payload.roomCode,
@@ -207,7 +207,7 @@ io.on("connection", (socket) => {
     try {
       const session = socketSessions.get(socket.id);
       if (!session || session.roomCode !== payload.roomCode) {
-        throw new OnlineRoomError("Join or resume the room before choosing a faction.");
+        throw new OnlineRoomError("请先加入或恢复房间，再选择阵营。");
       }
       const room = await roomService.chooseFaction({
         roomCode: payload.roomCode,
@@ -229,7 +229,7 @@ io.on("connection", (socket) => {
     try {
       const session = socketSessions.get(socket.id);
       if (!session || session.roomCode !== payload.roomCode) {
-        throw new OnlineRoomError("Join or resume the room before sending commands.");
+        throw new OnlineRoomError("请先加入或恢复房间，再进行操作。");
       }
       const room = await roomService.applyPlayerCommand({
         roomCode: payload.roomCode,
@@ -251,7 +251,7 @@ io.on("connection", (socket) => {
     try {
       const session = socketSessions.get(socket.id);
       if (!session || session.roomCode !== payload.roomCode) {
-        throw new OnlineRoomError("Join or resume the room before leaving it.");
+        throw new OnlineRoomError("请先加入或恢复房间，再离开房间。");
       }
       const room = await roomService.leaveRoom({
         roomCode: payload.roomCode,
@@ -318,13 +318,9 @@ async function emitRoomViews(room: StoredOnlineRoom) {
     connectedPlayerIds
   } as const;
 
-  for (const seat of room.seats) {
-    emitToPlayer(
-      room.roomCode,
-      seat.playerId,
-      "room:view",
-      buildOnlineGameView(roomMeta, room.gameState, seat.playerId, room.lastCommand)
-    );
+  const views = buildOnlineGameViews(roomMeta, room.gameState, room.seats.map((seat) => seat.playerId), room.lastCommand);
+  for (const view of views) {
+    emitToPlayer(room.roomCode, view.viewerPlayerId, "room:view", view);
   }
 }
 
@@ -385,5 +381,5 @@ function toAckError(error: unknown): OnlineEventAck {
   if (error instanceof Error) {
     return { ok: false, error: error.message };
   }
-  return { ok: false, error: "Unknown online server error." };
+  return { ok: false, error: "联机服务器发生未知错误。" };
 }

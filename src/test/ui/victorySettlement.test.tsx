@@ -19,7 +19,7 @@ function player(overrides: Partial<PlayerState>): PlayerState {
       fortresses: 4,
       transports: 15,
       convoys: 8,
-      militia: 9,
+      militia: 12,
       watchtowers: 4
     },
     usedDevCardThisTurn: false,
@@ -75,7 +75,6 @@ describe("Victory settlement", () => {
         onClosePrivacy={vi.fn()}
         onDismissError={vi.fn()}
         onClear={onClear}
-        onImportState={vi.fn()}
         submit={vi.fn()}
         setTool={vi.fn()}
         setSelection={vi.fn()}

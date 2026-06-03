@@ -57,6 +57,7 @@ export function EdgeRoute({
     previewRouteType && previewOwner
       ? ({ "--route-color": previewOwner.color } as CSSProperties)
       : undefined;
+  const hasRouteSelectionOutline = Boolean(edge.route && routeAsset && (legal || selected || queued));
 
   if (edge.route && routeAsset) {
     return (
@@ -71,7 +72,19 @@ export function EdgeRoute({
           onClick();
         }}
       >
-        {(selected || queued) && <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="route-piece-highlight" />}
+        {hasRouteSelectionOutline && (
+          <image
+            href={routeAsset}
+            x={midX - routeLength / 2}
+            y={midY - routeBoxHeight / 2}
+            width={routeLength}
+            height={routeBoxHeight}
+            preserveAspectRatio="xMidYMid meet"
+            transform={`rotate(${routeAngle} ${midX} ${midY})`}
+            className={`route-piece-legal-outline ${selected || queued ? "is-selected" : ""}`}
+            aria-hidden="true"
+          />
+        )}
         <image
           href={routeAsset}
           x={midX - routeLength / 2}

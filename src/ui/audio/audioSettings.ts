@@ -1,11 +1,17 @@
 export interface AudioSettings {
   musicVolume: number;
   sfxVolume: number;
+  muted: boolean;
+  lastMusicVolume: number;
+  lastSfxVolume: number;
 }
 
 export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
   musicVolume: 70,
-  sfxVolume: 80
+  sfxVolume: 80,
+  muted: false,
+  lastMusicVolume: 70,
+  lastSfxVolume: 80
 };
 
 const AUDIO_SETTINGS_KEY = "zombie-catan-audio-settings";
@@ -22,9 +28,32 @@ function clampPercent(value: unknown, fallback: number): number {
 }
 
 export function normalizeAudioSettings(settings: Partial<AudioSettings> = {}): AudioSettings {
+  let musicVolume = clampPercent(settings.musicVolume, DEFAULT_AUDIO_SETTINGS.musicVolume);
+  let sfxVolume = clampPercent(settings.sfxVolume, DEFAULT_AUDIO_SETTINGS.sfxVolume);
+  let lastMusicVolume = clampPercent(settings.lastMusicVolume, musicVolume);
+  let lastSfxVolume = clampPercent(settings.lastSfxVolume, sfxVolume);
+
+  if (lastMusicVolume === 0 && lastSfxVolume === 0) {
+    lastMusicVolume = DEFAULT_AUDIO_SETTINGS.lastMusicVolume;
+    lastSfxVolume = DEFAULT_AUDIO_SETTINGS.lastSfxVolume;
+  }
+
+  if (!settings.muted && (musicVolume > 0 || sfxVolume > 0)) {
+    lastMusicVolume = musicVolume;
+    lastSfxVolume = sfxVolume;
+  }
+
+  if (musicVolume === 0 && sfxVolume === 0) {
+    musicVolume = lastMusicVolume;
+    sfxVolume = lastSfxVolume;
+  }
+
   return {
-    musicVolume: clampPercent(settings.musicVolume, DEFAULT_AUDIO_SETTINGS.musicVolume),
-    sfxVolume: clampPercent(settings.sfxVolume, DEFAULT_AUDIO_SETTINGS.sfxVolume)
+    musicVolume,
+    sfxVolume,
+    muted: settings.muted === true,
+    lastMusicVolume,
+    lastSfxVolume
   };
 }
 
@@ -33,7 +62,9 @@ export function loadAudioSettings(): AudioSettings {
   try {
     const raw = window.localStorage.getItem(AUDIO_SETTINGS_KEY);
     if (!raw) return DEFAULT_AUDIO_SETTINGS;
-    return normalizeAudioSettings(JSON.parse(raw) as Partial<AudioSettings>);
+    const normalized = normalizeAudioSettings(JSON.parse(raw) as Partial<AudioSettings>);
+    window.localStorage.setItem(AUDIO_SETTINGS_KEY, JSON.stringify(normalized));
+    return normalized;
   } catch {
     return DEFAULT_AUDIO_SETTINGS;
   }

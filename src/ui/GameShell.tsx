@@ -35,6 +35,7 @@ interface GameShellProps {
   interactionMode: InteractionMode;
   onlineRoomCode?: string;
   onlineConnectionState?: "disconnected" | "connecting" | "connected" | "reconnecting";
+  onlineCommandBusy?: boolean;
   tool: UiTool;
   selection?: UiSelection;
   animationEvents: GameAnimationEvent[];
@@ -43,7 +44,7 @@ interface GameShellProps {
   onDismissError: () => void;
   onReportError?: (message: string) => void;
   onClear: () => void;
-  onImportState: (state: GameState) => void;
+  onReconnectOnlineRoom?: () => void;
   onLeaveOnlineRoom?: () => void;
   submit: (command: Command) => void;
   setTool: (tool: UiTool) => void;
@@ -58,6 +59,7 @@ const MAP_EDGE_GUARD_PX = 64;
 const MAP_DRAG_START_THRESHOLD_PX = 8;
 const GAME_STAGE_WIDTH = 1672;
 const GAME_STAGE_HEIGHT = 941;
+const TURN_TIME_LIMIT_SECONDS = 60;
 
 interface MapViewState {
   scale: number;
@@ -96,6 +98,11 @@ function getStageScale() {
   return Math.max(0.01, Math.min(window.innerWidth / GAME_STAGE_WIDTH, window.innerHeight / GAME_STAGE_HEIGHT));
 }
 
+function syncFixedStageScale(scale: number) {
+  if (typeof document === "undefined") return;
+  document.documentElement.style.setProperty("--fixed-stage-scale", String(scale));
+}
+
 export function GameShell({
   state,
   error,
@@ -107,6 +114,7 @@ export function GameShell({
   interactionMode,
   onlineRoomCode,
   onlineConnectionState,
+  onlineCommandBusy = false,
   tool,
   selection,
   animationEvents,
@@ -115,7 +123,7 @@ export function GameShell({
   onDismissError,
   onReportError,
   onClear,
-  onImportState,
+  onReconnectOnlineRoom,
   onLeaveOnlineRoom,
   submit,
   setTool,
@@ -123,7 +131,17 @@ export function GameShell({
 }: GameShellProps) {
   const mode = getTurnUiMode(state);
   const effectivePendingPlayerId = pendingPlayerId ?? state.pending?.playerId;
+  const activeTimerPlayerId = effectivePendingPlayerId ?? state.currentPlayerId;
   const canInteract = interactionMode === "hot-seat" || viewerPlayerId === (effectivePendingPlayerId ?? state.currentPlayerId);
+  const turnTimerScope = state.pending ? `pending:${state.pending.kind}` : "turn";
+  const turnTimerKey = [
+    state.turn,
+    activeTimerPlayerId,
+    turnTimerScope
+  ].join(":");
+  const [turnTimeRemaining, setTurnTimeRemaining] = useState(TURN_TIME_LIMIT_SECONDS);
+  const submittedTimeoutKeyRef = useRef<string>();
+  const submitRef = useRef(submit);
   const [stageScale, setStageScale] = useState(getStageScale);
   const mapViewRef = useRef<MapViewState>({
     scale: DEFAULT_MAP_SCALE,
@@ -343,14 +361,47 @@ export function GameShell({
   }, []);
 
   useEffect(() => {
+    submitRef.current = submit;
+  }, [submit]);
+
+  useEffect(() => {
     const handleResize = () => {
-      setStageScale(getStageScale());
+      const nextScale = getStageScale();
+      setStageScale(nextScale);
+      syncFixedStageScale(nextScale);
       applyMapView(getMapView());
     };
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  useEffect(() => {
+    if (mode === "victory") {
+      setTurnTimeRemaining(0);
+      return;
+    }
+
+    const startedAt = Date.now();
+    submittedTimeoutKeyRef.current = undefined;
+    setTurnTimeRemaining(TURN_TIME_LIMIT_SECONDS);
+
+    const timerId = window.setInterval(() => {
+      const elapsedMs = Date.now() - startedAt;
+      const nextRemaining = Math.max(0, Math.ceil((TURN_TIME_LIMIT_SECONDS * 1000 - elapsedMs) / 1000));
+      setTurnTimeRemaining(nextRemaining);
+
+      if (nextRemaining > 0 || !canInteract || submittedTimeoutKeyRef.current === turnTimerKey) return;
+      submittedTimeoutKeyRef.current = turnTimerKey;
+      submitRef.current({
+        type: "timeoutTurn",
+        expectedPlayerId: activeTimerPlayerId,
+        expectedTurn: state.turn
+      });
+    }, 250);
+
+    return () => window.clearInterval(timerId);
+  }, [activeTimerPlayerId, canInteract, mode, state.turn, turnTimerKey]);
 
   return (
     <main className="game-viewport">
@@ -428,12 +479,15 @@ export function GameShell({
           interactionMode={interactionMode}
           onlineRoomCode={onlineRoomCode}
           onlineConnectionState={onlineConnectionState}
+          turnTimeRemaining={turnTimeRemaining}
+          turnTimeLimit={TURN_TIME_LIMIT_SECONDS}
           animationBusy={animationBusy}
+          commandBusy={onlineCommandBusy}
           submit={submit}
           setTool={setTool}
           setSelection={setSelection}
           onClear={onClear}
-          onImportState={onImportState}
+          onReconnectOnlineRoom={onReconnectOnlineRoom}
           onLeaveOnlineRoom={onLeaveOnlineRoom}
         />
 

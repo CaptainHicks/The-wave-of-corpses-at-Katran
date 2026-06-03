@@ -24,8 +24,20 @@ import {
   longestSupplyLength
 } from "../../domain/rules";
 import { randomInt } from "../../domain/rng";
-import type { BoardState, EdgeState, GameState, Resources } from "../../domain/types";
-import { createResources } from "../../domain/constants";
+import type { BoardState, EdgeState, GameState, Resources, TileType } from "../../domain/types";
+import { DEV_CARD_COUNTS, PIECE_LIMITS, VICTORY_POINTS_TO_WIN, createResources } from "../../domain/constants";
+
+const NORMAL_RESOURCE_TYPES: TileType[] = ["factory", "farm", "military", "forest", "city"];
+const NORMAL_RESOURCE_TARGET_WEIGHTS: Record<TileType, number> = {
+  factory: 24,
+  farm: 22,
+  military: 20,
+  forest: 19,
+  city: 15,
+  warehouse: 0,
+  infected: 0,
+  empty: 0
+};
 
 function players() {
   return [
@@ -104,6 +116,55 @@ function resourceClusters(board: BoardState): Set<"large" | "small"> {
   );
 }
 
+function smallResourceZoneIdsForVertex(board: BoardState, vertexId: string): string[] {
+  const vertex = board.vertices[vertexId];
+  const zoneIds = new Set<string>();
+  vertex.tileIds.forEach((tileId) => {
+    const tile = board.tiles[tileId];
+    if (tile.cluster === "small" && isResourceTile(tile)) {
+      zoneIds.add(smallResourceZoneId(board, tileId));
+    }
+  });
+  return [...zoneIds];
+}
+
+function smallResourceZoneId(board: BoardState, startTileId: string): string {
+  const visited = new Set<string>();
+  const stack = [startTileId];
+  while (stack.length > 0) {
+    const tileId = stack.pop()!;
+    if (visited.has(tileId)) continue;
+    const tile = board.tiles[tileId];
+    if (tile.cluster !== "small" || !isResourceTile(tile)) continue;
+    visited.add(tileId);
+    adjacentTileIds(board, tileId).forEach((adjacentId) => {
+      const adjacent = board.tiles[adjacentId];
+      if (adjacent.cluster === "small" && isResourceTile(adjacent) && !visited.has(adjacentId)) {
+        stack.push(adjacentId);
+      }
+    });
+  }
+  return [...visited].sort().join(",");
+}
+
+function findSmallResourceCampSpot(state: GameState): { vertexId: string; routeEdgeId: string; zoneIds: string[] } {
+  const spot = Object.values(state.board.vertices)
+    .map((vertex) => ({
+      vertex,
+      routeEdgeId: vertex.edgeIds.find((edgeId) => !state.board.edges[edgeId].route),
+      zoneIds: smallResourceZoneIdsForVertex(state.board, vertex.id)
+    }))
+    .find(
+      ({ vertex, routeEdgeId, zoneIds }) =>
+        !vertex.building &&
+        Boolean(routeEdgeId) &&
+        zoneIds.length > 0 &&
+        !vertexHasAdjacentBuilding(state.board, vertex.id)
+    );
+  expect(spot).toBeTruthy();
+  return { vertexId: spot!.vertex.id, routeEdgeId: spot!.routeEdgeId!, zoneIds: spot!.zoneIds };
+}
+
 function isBaseInitialCampCandidate(state: GameState, vertexId: string): boolean {
   const vertex = state.board.vertices[vertexId];
   return (
@@ -123,7 +184,12 @@ function baseInitialCampCandidates(state: GameState): string[] {
 
 function createGameWithLargeAndSmallInitialOptions(): GameState {
   for (let index = 0; index < 80; index += 1) {
-    const state = createSeededGame(`initial-largest-zone-${index}`);
+    const state = applyCommand(undefined, {
+      type: "createGame",
+      players: players(),
+      seed: `initial-largest-zone-${index}`,
+      fogEnabled: false
+    });
     const clusters = resourceClusters(state.board);
     const smallOnlyInitialVertex = Object.values(state.board.vertices).find(
       (vertex) =>
@@ -196,6 +262,116 @@ function resourceComponents(board: BoardState, cluster: "large" | "small"): stri
 
   return components;
 }
+
+function normalResourceTargetCounts(count: number): Record<TileType, number> {
+  const base = NORMAL_RESOURCE_TYPES.reduce<Record<TileType, number>>(
+    (acc, type) => {
+      acc[type] = Math.floor((count * NORMAL_RESOURCE_TARGET_WEIGHTS[type]) / 100);
+      return acc;
+    },
+    { farm: 0, forest: 0, factory: 0, city: 0, military: 0, warehouse: 0, infected: 0, empty: 0 }
+  );
+  const allocated = NORMAL_RESOURCE_TYPES.reduce((total, type) => total + base[type], 0);
+  const remainders = NORMAL_RESOURCE_TYPES.map((type) => ({
+    type,
+    remainder: (count * NORMAL_RESOURCE_TARGET_WEIGHTS[type]) / 100 - base[type]
+  })).sort((a, b) => b.remainder - a.remainder);
+
+  for (let index = 0; index < count - allocated; index += 1) {
+    base[remainders[index % remainders.length].type] += 1;
+  }
+
+  return base;
+}
+
+function sameResourceComponents(board: BoardState): string[][] {
+  const remaining = new Set(
+    Object.values(board.tiles)
+      .filter((tile) => NORMAL_RESOURCE_TYPES.includes(tile.hiddenType))
+      .map((tile) => tile.id)
+  );
+  const components: string[][] = [];
+
+  while (remaining.size > 0) {
+    const start = [...remaining][0];
+    const type = board.tiles[start].hiddenType;
+    const component: string[] = [];
+    const stack = [start];
+    remaining.delete(start);
+
+    while (stack.length > 0) {
+      const tileId = stack.pop()!;
+      component.push(tileId);
+      adjacentTileIds(board, tileId)
+        .filter((adjacentId) => remaining.has(adjacentId) && board.tiles[adjacentId].hiddenType === type)
+        .forEach((adjacentId) => {
+          remaining.delete(adjacentId);
+          stack.push(adjacentId);
+        });
+    }
+
+    components.push(component);
+  }
+
+  return components;
+}
+
+function clusterComponents(board: BoardState, cluster: "large" | "small"): string[][] {
+  const remaining = new Set(
+    Object.values(board.tiles)
+      .filter((tile) => tile.cluster === cluster)
+      .map((tile) => tile.id)
+  );
+  const components: string[][] = [];
+
+  while (remaining.size > 0) {
+    const start = [...remaining][0];
+    const component: string[] = [];
+    const stack = [start];
+    remaining.delete(start);
+
+    while (stack.length > 0) {
+      const tileId = stack.pop()!;
+      component.push(tileId);
+      adjacentTileIds(board, tileId)
+        .filter((adjacentId) => remaining.has(adjacentId))
+        .forEach((adjacentId) => {
+          remaining.delete(adjacentId);
+          stack.push(adjacentId);
+        });
+    }
+
+    components.push(component);
+  }
+
+  return components;
+}
+
+describe("game setup", () => {
+  it("gives each player the configured piece limits", () => {
+    const state = createSeededGame("piece-limits");
+
+    expect(state.players).toHaveLength(3);
+    state.players.forEach((player) => {
+      expect(player.pieces).toEqual(PIECE_LIMITS);
+    });
+  });
+});
+
+describe("development deck", () => {
+  it("matches the recommended development card totals", () => {
+    expect(DEV_CARD_COUNTS).toEqual({
+      secretBase: 5,
+      zombieApproaches: 4,
+      roadCrew: 2,
+      airdrop: 2,
+      merchant: 2,
+      militiaMobilization: 6,
+      requisition: 2
+    });
+    expect(Object.values(DEV_CARD_COUNTS).reduce((total, count) => total + count, 0)).toBe(23);
+  });
+});
 
 function findSimpleEdgePath(
   state: GameState,
@@ -303,6 +479,17 @@ describe("standard board", () => {
     expect(signatures.size).toBeGreaterThan(1);
   });
 
+  it("does not repeat the same board layout in consecutive new games", () => {
+    const signatures = Array.from(
+      { length: 14 },
+      (_, index) => createSeededGame(`non-repeat-layout-${index}`).board.structureSignature
+    );
+
+    signatures.slice(1).forEach((signature, index) => {
+      expect(signature).not.toBe(signatures[index]);
+    });
+  });
+
   it("randomizes resource placement inside repeated structure shapes", () => {
     const resourceSignaturesByStructure = new Map<string, Set<string>>();
 
@@ -314,6 +501,33 @@ describe("standard board", () => {
     });
 
     expect([...resourceSignaturesByStructure.values()].some((signatures) => signatures.size > 1)).toBe(true);
+  });
+
+  it("keeps initial large resource zones stocked with every normal resource", () => {
+    Array.from({ length: 8 }, (_, index) => createStandardBoard(`initial-zone-mix-${index}`)).forEach((board) => {
+      clusterComponents(board, "large").forEach((component) => {
+        NORMAL_RESOURCE_TYPES.forEach((type) => {
+          expect(component.filter((tileId) => board.tiles[tileId].hiddenType === type).length).toBeGreaterThanOrEqual(2);
+        });
+      });
+    });
+  });
+
+  it("keeps normal resources near the target distribution", () => {
+    Array.from({ length: 8 }, (_, index) => createStandardBoard(`resource-ratio-${index}`)).forEach((board) => {
+      const normalCount = Object.values(board.tiles).filter((tile) => NORMAL_RESOURCE_TYPES.includes(tile.hiddenType)).length;
+      const expectedCounts = normalResourceTargetCounts(normalCount);
+
+      NORMAL_RESOURCE_TYPES.forEach((type) => {
+        expect(Object.values(board.tiles).filter((tile) => tile.hiddenType === type)).toHaveLength(expectedCounts[type]);
+      });
+    });
+  });
+
+  it("prevents three or more adjacent tiles of the same normal resource", () => {
+    Array.from({ length: 8 }, (_, index) => createStandardBoard(`resource-adjacency-${index}`)).forEach((board) => {
+      expect(Math.max(...sameResourceComponents(board).map((component) => component.length))).toBeLessThanOrEqual(2);
+    });
   });
 
   it("keeps random map seeds valid and playable for setup", () => {
@@ -495,6 +709,11 @@ describe("setup and production", () => {
     const player = state.players[0];
     state.board.vertices[emptyEdge!.vertexIds[0]].building = { ownerId: player.id, type: "camp" };
     state.phase = "action";
+    state = applyCommand(state, {
+      type: "debugSetResources",
+      playerId: player.id,
+      resources: createResources({ ammo: 1, fuel: 1 })
+    });
 
     expect(legalBuildEdges(state, "transport")).not.toContain(emptyEdge!.id);
     expect(legalBuildEdges(state, "convoy")).toContain(emptyEdge!.id);
@@ -510,10 +729,10 @@ describe("setup and production", () => {
     state = applyCommand(state, {
       type: "buildRoute",
       edgeId: emptyEdge!.id,
-      routeType: "convoy",
-      free: true
+      routeType: "convoy"
     });
     expect(state.board.edges[emptyEdge!.id].route?.type).toBe("convoy");
+    expect(state.players[0].resources).toMatchObject({ ammo: 0, fuel: 0, metal: 0 });
   });
 
   it("exposes legal convoy move targets from an open convoy", () => {
@@ -667,6 +886,23 @@ describe("setup and production", () => {
     state = applyCommand(state, { type: "moveZombie", tileId: targetTileId });
     expect(state.zombieTrack).toBe(1);
   });
+
+  it("supports debug commands for zombie progress and fog reveal", () => {
+    let state = applyCommand(undefined, {
+      type: "createGame",
+      players: players(),
+      seed: "debug-system-menu",
+      fogEnabled: true,
+      debugMode: true
+    });
+    expect(Object.values(state.board.tiles).some((tile) => !tile.revealed)).toBe(true);
+
+    state = applyCommand(state, { type: "debugAdvanceZombieTrack" });
+    expect(state.zombieTrack).toBe(1);
+
+    state = applyCommand(state, { type: "debugRevealAllFog" });
+    expect(Object.values(state.board.tiles).every((tile) => tile.revealed)).toBe(true);
+  });
 });
 
 describe("free action phase", () => {
@@ -679,6 +915,54 @@ describe("free action phase", () => {
     });
     return applyCommand(state, { type: "rollDice", forced: [1, 1] });
   }
+
+  it("skips to the next player when the active turn times out", () => {
+    const state = actionGame();
+    const next = applyCommand(state, {
+      type: "timeoutTurn",
+      expectedPlayerId: state.currentPlayerId,
+      expectedTurn: state.turn
+    });
+
+    expect(next.currentPlayerId).toBe("p2");
+    expect(next.phase).toBe("prepare");
+    expect(next.turn).toBe(state.turn + 1);
+    expect(next.log[0].message).toContain("准备阶段");
+    expect(next.log.some((entry) => entry.message.includes("操作超时"))).toBe(true);
+  });
+
+  it("skips a player who times out before rolling dice", () => {
+    const state = setupGame();
+    const next = applyCommand(state, {
+      type: "timeoutTurn",
+      expectedPlayerId: state.currentPlayerId,
+      expectedTurn: state.turn
+    });
+
+    expect(next.currentPlayerId).toBe("p2");
+    expect(next.phase).toBe("prepare");
+    expect(next.turn).toBe(state.turn + 1);
+  });
+
+  it("declines a pending player trade when the responder times out", () => {
+    let state = actionGame();
+    state = applyCommand(state, {
+      type: "playerTrade",
+      targetPlayerId: "p2",
+      offer: { food: 1 },
+      request: { wood: 1 }
+    });
+    const next = applyCommand(state, {
+      type: "timeoutTurn",
+      expectedPlayerId: "p2",
+      expectedTurn: state.turn
+    });
+
+    expect(next.currentPlayerId).toBe("p1");
+    expect(next.phase).toBe("action");
+    expect(next.pending).toBeUndefined();
+    expect(next.log.some((entry) => entry.message.includes("拒绝了"))).toBe(true);
+  });
 
   it("blocks free actions before the mandatory dice roll", () => {
     let state = setupGame();
@@ -719,6 +1003,22 @@ describe("free action phase", () => {
     expect(state.phase).toBe("action");
   });
 
+  it("builds transport lines with wood and metal", () => {
+    let state = actionGame();
+    state = applyCommand(state, {
+      type: "debugSetResources",
+      playerId: state.currentPlayerId,
+      resources: createResources({ wood: 1, metal: 1 })
+    });
+    const edge = legalBuildEdges(state, "transport")[0];
+    expect(edge).toBeTruthy();
+
+    state = applyCommand(state, { type: "buildRoute", edgeId: edge, routeType: "transport" });
+
+    expect(state.board.edges[edge].route?.type).toBe("transport");
+    expect(state.players[0].resources).toMatchObject({ wood: 0, metal: 0, fuel: 0 });
+  });
+
   it("allows recruiting and readying militia before trading", () => {
     let state = actionGame();
     const vertex = legalRecruitVertices(state)[0];
@@ -739,6 +1039,57 @@ describe("free action phase", () => {
     state = applyCommand(state, { type: "bankTrade", give: "food", receive: "wood" });
 
     expect(state.players[0].devCards).toHaveLength(1);
+  });
+
+  it("lets militia mobilization recruit two militia", () => {
+    let state = actionGame();
+    const vertexId = legalRecruitVertices(state)[0];
+    expect(vertexId).toBeTruthy();
+    state.players[0].devCards.push({ id: "militia-card", type: "militiaMobilization", purchasedTurn: 0 });
+    const piecesBefore = state.players[0].pieces.militia;
+
+    state = applyCommand(state, {
+      type: "playDevelopmentCard",
+      cardId: "militia-card",
+      payload: { vertexIds: [vertexId, vertexId] }
+    });
+
+    expect(state.players[0].militia.filter((militia) => militia.vertexId === vertexId)).toHaveLength(2);
+    expect(state.players[0].pieces.militia).toBe(piecesBefore - 2);
+    expect(state.players[0].devCards.some((card) => card.id === "militia-card")).toBe(false);
+  });
+
+  it("awards one victory point when a player first camps in a new resource zone", () => {
+    let state = actionGame();
+    const playerId = state.currentPlayerId;
+    const spot = findSmallResourceCampSpot(state);
+    const scoreBefore = calculateScore(state, playerId).total;
+    state.board.edges[spot.routeEdgeId].route = { ownerId: playerId, type: "transport" };
+
+    state = applyCommand(state, { type: "buildCamp", vertexId: spot.vertexId, free: true });
+    const score = calculateScore(state, playerId);
+
+    spot.zoneIds.forEach((zoneId) => {
+      expect(state.awards.newResourceZones?.[playerId]).toContain(zoneId);
+    });
+    expect(score.newResourceZones).toBe(spot.zoneIds.length);
+    expect(score.total).toBe(scoreBefore + 1 + spot.zoneIds.length);
+  });
+
+  it("does not award the same new resource zone to the same player twice", () => {
+    let state = actionGame();
+    const playerId = state.currentPlayerId;
+    const spot = findSmallResourceCampSpot(state);
+    state.awards.newResourceZones = { [playerId]: spot.zoneIds };
+    const scoreBefore = calculateScore(state, playerId).total;
+    state.board.edges[spot.routeEdgeId].route = { ownerId: playerId, type: "transport" };
+
+    state = applyCommand(state, { type: "buildCamp", vertexId: spot.vertexId, free: true });
+    const score = calculateScore(state, playerId);
+
+    expect(state.awards.newResourceZones?.[playerId]).toEqual(spot.zoneIds);
+    expect(score.newResourceZones).toBe(spot.zoneIds.length);
+    expect(score.total).toBe(scoreBefore + 1);
   });
 
   it("blocks free actions while pending choices remain unresolved", () => {
@@ -801,11 +1152,11 @@ describe("scoring and siege", () => {
   it("checks victory on end turn and reveals hidden secret bases when needed", () => {
     let state = setupGame();
     const p1 = state.players[0];
-    p1.defenderTokens = 11;
+    p1.defenderTokens = VICTORY_POINTS_TO_WIN - 3;
     p1.devCards.push({ id: "hidden-secret", type: "secretBase", purchasedTurn: 0 });
     state.phase = "action";
 
-    expect(calculateScore(state, p1.id).total).toBe(13);
+    expect(calculateScore(state, p1.id).total).toBe(VICTORY_POINTS_TO_WIN - 1);
     state = applyCommand(state, { type: "endTurn" });
 
     expect(state.phase).toBe("victory");

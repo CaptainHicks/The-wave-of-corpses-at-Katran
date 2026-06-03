@@ -29,12 +29,3 @@ export function loadGame(): GameState | undefined {
 export function clearSavedGame(): void {
   localStorage.removeItem(STORAGE_KEY);
 }
-
-export function exportGame(state: GameState): string {
-  return JSON.stringify(state, null, 2);
-}
-
-export function importGame(raw: string): GameState {
-  const parsed = JSON.parse(raw) as GameState | SaveEnvelope;
-  return "state" in parsed ? parsed.state : parsed;
-}

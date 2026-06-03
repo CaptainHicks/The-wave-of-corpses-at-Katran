@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { boardMarkerAssets, boardNumberTokenAssets, getBuildingPieceAsset, getRoutePieceAsset, tileAssets } from "../../ui/art/assetManifest";
-import { GAME_ART_CRITICAL_PRELOAD_URLS, GAME_ART_PRELOAD_URLS } from "../../ui/art/preloadGameAssets";
+import {
+  GAME_ART_CRITICAL_PRELOAD_URLS,
+  GAME_ART_PRELOAD_URLS,
+  isCriticalGameArtPreloadComplete,
+  preloadCriticalGameArtAssets
+} from "../../ui/art/preloadGameAssets";
 
 describe("game art preloading", () => {
   it("warms the first setup placement assets before the game board opens", () => {
@@ -33,5 +38,15 @@ describe("game art preloading", () => {
     expect(GAME_ART_PRELOAD_URLS).toContain("/assets/board/buildings/purple/camp.v1.webp");
     expect(GAME_ART_PRELOAD_URLS).toContain("/assets/board/buildings/red/camp-watchtower-militia-2.v1.webp");
     expect(GAME_ART_PRELOAD_URLS).toContain("/assets/board/markers/lightning-green.v1.webp");
+  });
+
+  it("does not block tests or server rendering while waiting for browser image decode", async () => {
+    await expect(preloadCriticalGameArtAssets()).resolves.toEqual({
+      total: GAME_ART_CRITICAL_PRELOAD_URLS.length,
+      loaded: GAME_ART_CRITICAL_PRELOAD_URLS.length,
+      failed: 0,
+      complete: true
+    });
+    expect(isCriticalGameArtPreloadComplete()).toBe(true);
   });
 });

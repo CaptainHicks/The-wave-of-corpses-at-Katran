@@ -67,6 +67,7 @@ export function VertexToken({
   const previewPieceBox = previewBuildingType ? BUILDING_PIECE_BOX[previewBuildingType].plain : undefined;
   const hasPreviewBuilding = Boolean(previewBuildingAsset && previewPieceBox);
   const hasExpandedHitArea = Boolean(expandedHitArea && !vertex.building && !hasPreviewBuilding);
+  const hasLegalBuildingTarget = Boolean(vertex.building && buildingAsset && pieceBox && legal);
   const targetHitRadius = coarsePointer ? 20 : 18;
   const touchCueRadius = 13;
   const emptyHitRadius = coarsePointer ? 6 : 5;
@@ -107,18 +108,32 @@ export function VertexToken({
         />
       )}
       {vertex.building && buildingAsset && pieceBox && (
-        <image
-          href={buildingAsset}
-          x={vertex.x - pieceBox.width / 2}
-          y={vertex.y - pieceBox.height * 0.62}
-          width={pieceBox.width}
-          height={pieceBox.height}
-          preserveAspectRatio="xMidYMid meet"
-          className={`building-piece building-piece-${vertex.building.type} ${
-            legal ? "legal-building-target" : ""
-          }`}
-          aria-hidden="true"
-        />
+        <>
+          {hasLegalBuildingTarget && (
+            <image
+              href={buildingAsset}
+              x={vertex.x - pieceBox.width / 2}
+              y={vertex.y - pieceBox.height * 0.62}
+              width={pieceBox.width}
+              height={pieceBox.height}
+              preserveAspectRatio="xMidYMid meet"
+              className="building-piece-legal-outline"
+              aria-hidden="true"
+            />
+          )}
+          <image
+            href={buildingAsset}
+            x={vertex.x - pieceBox.width / 2}
+            y={vertex.y - pieceBox.height * 0.62}
+            width={pieceBox.width}
+            height={pieceBox.height}
+            preserveAspectRatio="xMidYMid meet"
+            className={`building-piece building-piece-${vertex.building.type} ${
+              legal ? "legal-building-target" : ""
+            }`}
+            aria-hidden="true"
+          />
+        </>
       )}
       {vertex.building && !buildingAsset && (
         <>

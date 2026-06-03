@@ -2,6 +2,7 @@ import {
   BASE_HAND_LIMIT,
   COSTS,
   DEV_CARD_COUNTS,
+  PIECE_LIMITS,
   RESOURCES,
   TILE_RESOURCE,
   VICTORY_POINTS_TO_WIN,
@@ -44,8 +45,12 @@ import type {
   Resource,
   Resources,
   RouteType,
-  ScoreBreakdown
+  ScoreBreakdown,
+  VertexState
 } from "./types";
+
+const MILITIA_MOBILIZATION_AMOUNT = 2;
+let lastGameBoardStructureSignature: string | undefined;
 
 export class RuleError extends Error {
   constructor(message: string) {
@@ -146,14 +151,7 @@ function emptyPlayer(index: number, name: string, color: string, factionId?: str
     militia: [],
     defenderTokens: 0,
     movedConvoyThisTurn: false,
-    pieces: {
-      camps: 6,
-      fortresses: 5,
-      transports: 15,
-      convoys: 15,
-      militia: 9,
-      watchtowers: 3
-    },
+    pieces: { ...PIECE_LIMITS },
     usedDevCardThisTurn: false
   };
 }
@@ -175,7 +173,8 @@ export function createGame(
   fogEnabled = true
 ): GameState {
   assertRule(players.length >= 2 && players.length <= 6, "本地热座版支持2到6名玩家。");
-  const board = createStandardBoard(seed);
+  const board = createStandardBoard(seed, { avoidStructureSignature: lastGameBoardStructureSignature });
+  lastGameBoardStructureSignature = board.structureSignature;
   if (!fogEnabled) {
     Object.values(board.tiles).forEach((tile) => {
       tile.revealed = true;
@@ -594,6 +593,89 @@ function endTurn(state: GameState): void {
   checkVictoryOrNext(state);
 }
 
+function timeoutTurn(state: GameState, expectedPlayerId?: string, expectedTurn?: number): void {
+  if (expectedTurn != null && expectedTurn !== state.turn) return;
+  const activePlayerId = state.pending?.playerId ?? state.currentPlayerId;
+  if (expectedPlayerId && expectedPlayerId !== activePlayerId) return;
+  assertRule(state.phase !== "victory", "游戏已经结束。");
+
+  const player = findPlayer(state, activePlayerId);
+  event(state, `${player.name} 操作超时，系统自动托管。`);
+
+  if (state.pending) {
+    resolvePendingTimeout(state);
+    return;
+  }
+
+  if (state.phase === "setup") {
+    const vertexId = legalInitialCampVertices(state)[0];
+    assertRule(vertexId, "没有可自动放置的初始营地。");
+    placeInitialCamp(state, vertexId);
+    return;
+  }
+
+  checkVictoryOrNext(state);
+}
+
+function resolvePendingTimeout(state: GameState): void {
+  const pending = state.pending;
+  assertRule(pending, "当前没有待处理选择。");
+
+  if (pending.kind === "setupRoute") {
+    const edgeId = legalInitialRouteEdges(state)[0];
+    assertRule(edgeId, "没有可自动放置的初始运输线。");
+    placeInitialRoute(state, edgeId);
+    return;
+  }
+
+  if (pending.kind === "chooseResource") {
+    chooseResource(state, createResources({ food: pending.amount }));
+    return;
+  }
+
+  if (pending.kind === "discard") {
+    const player = findPlayer(state, pending.playerId);
+    resolveDiscard(state, takeFirstResources(player.resources, pending.amount));
+    return;
+  }
+
+  if (pending.kind === "moveZombie") {
+    const tileId =
+      Object.values(state.board.tiles).find((tile) => tile.revealed && tile.id !== state.zombieTileId)?.id ??
+      Object.values(state.board.tiles).find((tile) => tile.revealed)?.id;
+    assertRule(tileId, "没有可自动移动尸潮的地块。");
+    moveZombie(state, tileId);
+    return;
+  }
+
+  if (pending.kind === "stealResource") {
+    const targetPlayerId =
+      pending.targetPlayerIds.find((playerId) => resourceTotal(findPlayer(state, playerId).resources) > 0) ??
+      pending.targetPlayerIds[0];
+    stealResource(state, targetPlayerId);
+    return;
+  }
+
+  if (pending.kind === "confirmTrade") {
+    confirmPlayerTrade(state, false);
+    return;
+  }
+
+  if (pending.kind === "downgradeFortress") {
+    resolveDowngrade(state, pending.vertexIds[0]);
+  }
+}
+
+function takeFirstResources(resources: Resources, amount: number): Resources {
+  let remaining = amount;
+  return RESOURCES.reduce<Resources>((picked, resource) => {
+    const count = Math.min(resources[resource], remaining);
+    picked[resource] = count;
+    remaining -= count;
+    return picked;
+  }, createResources());
+}
+
 function scoreForVictoryCheck(state: GameState, player: PlayerState): ScoreBreakdown {
   let score = calculateScore(state, player.id);
   const hiddenSecretBases = player.devCards.filter(
@@ -842,7 +924,56 @@ function buildCamp(state: GameState, vertexId: string, free?: boolean): void {
   takeCost(player, COSTS.camp, free);
   player.pieces.camps -= 1;
   vertex.building = { ownerId: player.id, type: "camp" };
+  awardNewResourceZoneBonuses(state, player, vertexId);
   event(state, `${player.name} 建造营地。`);
+}
+
+function awardNewResourceZoneBonuses(state: GameState, player: PlayerState, vertexId: string): void {
+  const touchedZoneIds = new Set(touchedSmallResourceZoneIds(state.board, vertexId));
+  if (touchedZoneIds.size === 0) return;
+
+  const claimedByPlayer = new Set(state.awards.newResourceZones?.[player.id] ?? []);
+  const newlyClaimed = [...touchedZoneIds].filter((zoneId) => !claimedByPlayer.has(zoneId));
+  if (newlyClaimed.length === 0) return;
+
+  state.awards.newResourceZones ??= {};
+  state.awards.newResourceZones[player.id] = [...claimedByPlayer, ...newlyClaimed];
+  newlyClaimed.forEach(() => {
+    event(state, `${player.name} 首次在新资源区建立营地，获得1胜利点。`);
+  });
+}
+
+function touchedSmallResourceZoneIds(board: BoardState, vertexId: string): string[] {
+  const vertex = board.vertices[vertexId];
+  if (!vertex) return [];
+  const touchedSmallTileIds = vertex.tileIds.filter((tileId) => {
+    const tile = board.tiles[tileId];
+    return tile.cluster === "small" && isResourceTile(tile);
+  });
+  if (touchedSmallTileIds.length === 0) return [];
+
+  const zoneIds = new Set<string>();
+  touchedSmallTileIds.forEach((tileId) => zoneIds.add(smallResourceZoneId(board, tileId)));
+  return [...zoneIds];
+}
+
+function smallResourceZoneId(board: BoardState, startTileId: string): string {
+  const visited = new Set<string>();
+  const stack = [startTileId];
+  while (stack.length > 0) {
+    const tileId = stack.pop()!;
+    if (visited.has(tileId)) continue;
+    const tile = board.tiles[tileId];
+    if (tile.cluster !== "small" || !isResourceTile(tile)) continue;
+    visited.add(tileId);
+    adjacentTileIds(board, tileId).forEach((adjacentId) => {
+      const adjacent = board.tiles[adjacentId];
+      if (adjacent.cluster === "small" && isResourceTile(adjacent) && !visited.has(adjacentId)) {
+        stack.push(adjacentId);
+      }
+    });
+  }
+  return [...visited].sort().join(",");
 }
 
 function upgradeFortress(state: GameState, vertexId: string, free?: boolean): void {
@@ -890,6 +1021,64 @@ function recruitMilitia(state: GameState, vertexId: string, free?: boolean): voi
   player.pieces.militia -= 1;
   event(state, `${player.name} 征召1个民兵。`);
   updateAwards(state);
+}
+
+function canPlanRecruitMilitia(
+  player: PlayerState,
+  vertex: VertexState | undefined,
+  vertexId: string,
+  plannedVertexIds: string[]
+): boolean {
+  return Boolean(
+    vertex?.building?.ownerId === player.id &&
+      player.militia.filter((militia) => militia.vertexId === vertexId).length +
+        plannedVertexIds.filter((plannedVertexId) => plannedVertexId === vertexId).length <
+        2
+  );
+}
+
+function resolveMilitiaMobilizationVertices(
+  state: GameState,
+  player: PlayerState,
+  payload?: Record<string, unknown>
+): string[] {
+  assertRule(player.pieces.militia > 0, "民兵棋子不足。");
+
+  const payloadVertexIds = Array.isArray(payload?.vertexIds)
+    ? payload.vertexIds.filter((vertexId): vertexId is string => typeof vertexId === "string")
+    : undefined;
+  const legacyVertexId = typeof payload?.vertexId === "string" ? payload.vertexId : undefined;
+  const requestedVertexIds = payloadVertexIds ?? (legacyVertexId ? [legacyVertexId] : []);
+  const plannedVertexIds: string[] = [];
+  const addVertex = (vertexId: string, strict: boolean) => {
+    const vertex = state.board.vertices[vertexId];
+    const canRecruit = canPlanRecruitMilitia(player, vertex, vertexId, plannedVertexIds);
+    if (strict) assertRule(canRecruit, "这张卡只能把民兵部署到自己的营地或堡垒，且每处最多2个。");
+    if (!canRecruit) return;
+    plannedVertexIds.push(vertexId);
+  };
+
+  requestedVertexIds.slice(0, MILITIA_MOBILIZATION_AMOUNT).forEach((vertexId) => {
+    if (plannedVertexIds.length < player.pieces.militia) addVertex(vertexId, true);
+  });
+
+  if (payloadVertexIds && payloadVertexIds.length > 0) {
+    assertRule(plannedVertexIds.length > 0, "没有可放置民兵的营地或堡垒。");
+    return plannedVertexIds;
+  }
+
+  const candidateVertexIds = [...requestedVertexIds, ...legalRecruitVerticesForPlayer(state, player.id)];
+  while (plannedVertexIds.length < MILITIA_MOBILIZATION_AMOUNT && plannedVertexIds.length < player.pieces.militia) {
+    const countBeforePass = plannedVertexIds.length;
+    for (const vertexId of candidateVertexIds) {
+      addVertex(vertexId, false);
+      if (plannedVertexIds.length >= MILITIA_MOBILIZATION_AMOUNT || plannedVertexIds.length >= player.pieces.militia) break;
+    }
+    if (plannedVertexIds.length === countBeforePass) break;
+  }
+
+  assertRule(plannedVertexIds.length > 0, "没有可放置民兵的营地或堡垒。");
+  return plannedVertexIds;
 }
 
 function activateMilitia(state: GameState, militiaId: string): void {
@@ -1010,16 +1199,9 @@ function playDevelopmentCard(state: GameState, cardId: string, payload?: Record<
   player.devCards = player.devCards.filter((item) => item.id !== cardId);
 
   if (card.type === "militiaMobilization") {
-    const vertexId =
-      typeof payload?.vertexId === "string"
-        ? payload.vertexId
-        : Object.values(state.board.vertices).find(
-            (vertex) =>
-              vertex.building?.ownerId === player.id &&
-              player.militia.filter((militia) => militia.vertexId === vertex.id).length < 2
-          )?.id;
-    assertRule(vertexId, "没有可放置民兵的营地或堡垒。");
-    recruitMilitia(state, vertexId, true);
+    const vertexIds = resolveMilitiaMobilizationVertices(state, player, payload);
+    vertexIds.forEach((vertexId) => recruitMilitia(state, vertexId, true));
+    event(state, `${player.name} 使用民兵动员征召${vertexIds.length}个民兵。`);
   } else if (card.type === "roadCrew") {
     const routePayload = payload?.routes as Array<{ edgeId: string; routeType: RouteType }> | undefined;
     const routes =
@@ -1161,6 +1343,7 @@ export function calculateScore(state: GameState, playerId: string): ScoreBreakdo
   const camps = buildings.filter((vertex) => vertex.building?.type === "camp").length;
   const fortresses = buildings.filter((vertex) => vertex.building?.type === "fortress").length;
   const secretBases = player.devCards.filter((card) => card.type === "secretBase" && card.revealed).length;
+  const newResourceZones = new Set(state.awards.newResourceZones?.[playerId] ?? []).size;
   const breakdown: ScoreBreakdown = {
     camps,
     fortresses: fortresses * 2,
@@ -1169,6 +1352,7 @@ export function calculateScore(state: GameState, playerId: string): ScoreBreakdo
     secretBases,
     defenderTokens: player.defenderTokens,
     merchant: state.merchant.controllerId === playerId ? 1 : 0,
+    newResourceZones,
     total: 0
   };
   breakdown.total =
@@ -1178,7 +1362,8 @@ export function calculateScore(state: GameState, playerId: string): ScoreBreakdo
     breakdown.strongestMilitia +
     breakdown.secretBases +
     breakdown.defenderTokens +
-    breakdown.merchant;
+    breakdown.merchant +
+    breakdown.newResourceZones;
   return breakdown;
 }
 
@@ -1367,6 +1552,9 @@ export function applyCommand(baseState: GameState | undefined, command: Command)
       case "endTurn":
         endTurn(state);
         break;
+      case "timeoutTurn":
+        timeoutTurn(state, command.expectedPlayerId, command.expectedTurn);
+        break;
       case "bankTrade":
         bankTrade(state, command.give, command.receive, command.rate);
         break;
@@ -1419,6 +1607,16 @@ export function applyCommand(baseState: GameState | undefined, command: Command)
       case "debugJumpPhase":
         state.phase = command.phase;
         event(state, `调试：阶段跳转到 ${command.phase}。`);
+        break;
+      case "debugAdvanceZombieTrack":
+        advanceZombieTrack(state, 1);
+        event(state, "调试：已推进尸潮进度。");
+        break;
+      case "debugRevealAllFog":
+        Object.values(state.board.tiles).forEach((tile) => {
+          tile.revealed = true;
+        });
+        event(state, "调试：全部迷雾已解锁。");
         break;
       default:
         command satisfies never;

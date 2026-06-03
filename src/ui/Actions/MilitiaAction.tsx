@@ -6,15 +6,16 @@ import type { UiSelection, UiTool } from "../gameUiTypes";
 import { AssetIcon } from "./AssetIcon";
 
 const COPY = {
-  recruitTitle: "\u5f81\u53ec",
+  recruitTitle: "\u5f81\u53ec\u4e0e\u6fc0\u6d3b",
   recruitButton: "\u5f81\u53ec\u6c11\u5175",
-  recruitHelp: "\u70b9\u51fb\u5df1\u65b9\u8425\u5730\u6216\u5821\u5792\u90e8\u7f72\u6c11\u5175\uff0c\u6bcf\u5904\u6700\u591a\u9a7b\u5b88 2 \u4e2a\u3002",
-  commandTitle: "\u5df2\u90e8\u7f72\u6c11\u5175",
+  recruitHelp: "\u70b9\u51fb\u5df1\u65b9\u8425\u5730\u6216\u5821\u5792\u5f81\u53ec\u6c11\u5175\uff0c\u6bcf\u5904\u6700\u591a\u9a7b\u5b88 2 \u4e2a\u3002",
   activateButton: "\u6fc0\u6d3b\u6c11\u5175",
-  activateHelp: "\u70b9\u51fb\u5730\u56fe\u4e0a\u9a7b\u6709\u672a\u6fc0\u6d3b\u6c11\u5175\u7684\u8425\u5730\u6216\u5821\u5792\u3002",
+  activateHelp:
+    "\u70b9\u51fb\u5df2\u5f81\u53ec\u6c11\u5175\u7684\u8425\u5730\u6216\u5821\u5792\u6fc0\u6d3b\u6c11\u5175\uff0c\u6fc0\u6d3b\u7684\u6c11\u5175\u4e0b\u56de\u5408\u624d\u80fd\u4f7f\u7528\u3002",
   move: "\u79fb\u52a8",
   expel: "\u9a71\u9010\u5c38\u6f6e",
-  empty: "\u5f53\u524d\u6ca1\u6709\u53ef\u6307\u6325\u7684\u6c11\u5175\u3002"
+  empty:
+    "\u70b9\u51fb\u5df2\u5f81\u53ec\u6c11\u5175\u7684\u8425\u5730\u6216\u5821\u5792\u6fc0\u6d3b\u6c11\u5175\uff0c\u6fc0\u6d3b\u7684\u6c11\u5175\u4e0b\u56de\u5408\u624d\u80fd\u4f7f\u7528\u3002"
 };
 
 export function MilitiaAction({
@@ -45,7 +46,6 @@ export function MilitiaAction({
       </div>
 
       <div className="action-subsection">
-        <h3>{COPY.commandTitle}</h3>
         <div className="button-grid">
           <button
             className="tool-card militia-activate-card"

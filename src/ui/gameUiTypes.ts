@@ -19,7 +19,7 @@ export type UiSelection =
   | { kind: "moveMilitia"; militiaId: string }
   | { kind: "expelZombie"; militiaId: string }
   | { kind: "devMerchant"; cardId: string }
-  | { kind: "devMilitia"; cardId: string }
+  | { kind: "devMilitia"; cardId: string; vertexIds: string[] }
   | {
       kind: "devRoadCrew";
       cardId: string;

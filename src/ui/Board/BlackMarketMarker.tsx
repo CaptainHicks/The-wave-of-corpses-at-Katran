@@ -26,7 +26,7 @@ export function BlackMarketMarker({
   const icon = edge.blackMarket.type === "specific" ? resourceIconAssets[edge.blackMarket.resource].imageUrl : undefined;
 
   return (
-    <g className="market-marker" data-edge-id={edge.id}>
+    <g className="market-marker" data-edge-id={edge.id} aria-label={marketAccessibleLabel(edge.blackMarket)}>
       <image
         href={boardMarkerAssets.blackMarket}
         x={pieceX - 22}
@@ -39,12 +39,20 @@ export function BlackMarketMarker({
         aria-hidden="true"
       />
       <g className="market-marker-label" aria-hidden="true">
-        {icon && <image href={icon} x={labelX - 13} y={labelY - 6} width="11" height="11" preserveAspectRatio="xMidYMid meet" />}
+        {icon && (
+          <image
+            href={icon}
+            x={labelX - 13}
+            y={labelY - 6}
+            width="11"
+            height="11"
+            preserveAspectRatio="xMidYMid meet"
+          />
+        )}
         <text x={labelX + (icon ? 7 : 0)} y={labelY + 4}>
           {marketRatio(edge.blackMarket)}
         </text>
       </g>
-      <title>{marketAccessibleLabel(edge.blackMarket)}</title>
     </g>
   );
 }

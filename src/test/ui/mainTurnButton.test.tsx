@@ -28,4 +28,21 @@ describe("MainTurnButton", () => {
     expect(getByText("进入下一位玩家的回合")).toBeInTheDocument();
     expect(container.querySelector(".turn-button-art")).toHaveAttribute("src", "/assets/hud/hourglass.v1.webp");
   });
+
+  it("shows an immediate busy state while an online command is being submitted", () => {
+    const { getByRole, getByText } = render(
+      <MainTurnButton
+        state={stateWithPhase("action")}
+        mode="freeAction"
+        animationBusy={false}
+        commandBusy
+        submit={vi.fn()}
+      />
+    );
+
+    expect(getByRole("button")).toBeDisabled();
+    expect(getByRole("button")).toHaveAttribute("aria-busy", "true");
+    expect(getByText("同步中")).toBeInTheDocument();
+    expect(getByText("正在提交联机操作")).toBeInTheDocument();
+  });
 });

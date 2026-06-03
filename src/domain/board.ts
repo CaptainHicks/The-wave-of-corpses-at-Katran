@@ -32,57 +32,87 @@ interface BoardCell {
   role: Exclude<BoardCluster, "empty">;
 }
 
+interface CreateStandardBoardOptions {
+  avoidStructureSignature?: string;
+}
+
 const BOARD_STRUCTURES: readonly BoardStructure[] = [
   {
     id: "central-large",
     reveal: "large-buffer",
     rows: [
-      "OOSSOOSSO",
+      "SSOSSOOSS",
       "OOOOOOOOOO",
-      "OLLLLLLLLOO",
+      "OLLLLLLLLLO",
       "OLLLLLLLLLLO",
-      "OLLLLLLLLOO",
-      "SSOOOOOOSS",
-      "OOSSSSOOO"
+      "OLLLLLLLLLO",
+      "OOOOOOOOOO",
+      "SSOOSSOSS"
     ]
   },
   {
     id: "left-large",
     reveal: "large-buffer",
     rows: [
-      "LLLOOOOOO",
-      "LLLLOOOOOS",
-      "LLLLLOOOOSS",
-      "LLLLLOOOOSSS",
-      "LLLLOOOOSSS",
-      "LLLOOOOSSS",
-      "OOOOOOOSS"
+      "LLLOOSSSS",
+      "LLLLOOSSSS",
+      "LLLLLOOSSSS",
+      "LLLLLLOOSSSS",
+      "LLLLLOOSSSS",
+      "LLLLOOSSSS",
+      "LLLOOSSSS"
     ]
   },
   {
     id: "right-large",
     reveal: "large-buffer",
     rows: [
-      "OOOOOOLLL",
-      "SOOOOOLLLL",
-      "SSOOOOLLLLL",
-      "SSSOOOOLLLLL",
-      "SSSOOOOLLLL",
-      "SSSOOOOLLL",
-      "SSOOOOOOO"
+      "SSSSOOLLL",
+      "SSSSOOLLLL",
+      "SSSSOOLLLLL",
+      "SSSSOOLLLLLL",
+      "SSSSOOLLLLL",
+      "SSSSOOLLLL",
+      "SSSSOOLLL"
     ]
   },
   {
     id: "dual-large",
     reveal: "large-buffer",
     rows: [
-      "LLOOOOOLL",
-      "LLOOOSOOLL",
-      "LLOOOSSOOLL",
-      "LLOOOSSSOOLL",
-      "LLOOOSSOOLL",
-      "LLOOSSSOLL",
+      "LLOOSOOLL",
+      "LLOOSSOOLL",
+      "LLOOSSSOOLL",
+      "LLOOSSSSOOLL",
+      "LLOOSSSOOLL",
+      "LLOOSSOOLL",
       "OOOSSSOOO"
+    ]
+  },
+  {
+    id: "left-start-split-right-a",
+    reveal: "large-buffer",
+    rows: [
+      "LLOOSSSSS",
+      "LLOOSSSSSS",
+      "LLOOSSOSOSS",
+      "LLLOOOOOOOOO",
+      "LLOOSSOSOSS",
+      "LLOOSSSSSS",
+      "LLOOSSSSS"
+    ]
+  },
+  {
+    id: "left-start-split-right-b",
+    reveal: "large-buffer",
+    rows: [
+      "LLOOSSSSS",
+      "LLOOSSSSSS",
+      "LLOOSSOSOSS",
+      "LLLOOOOOOOOO",
+      "LLOOSSOSOSS",
+      "LLOOSSSSSS",
+      "LLOOSSSSS"
     ]
   },
   {
@@ -110,14 +140,21 @@ const WAREHOUSE_NUMBERS = [3, 4, 10, 11];
 const HIGH_NUMBERS = [6, 8, 6, 8, 6, 8];
 const WAREHOUSE_COUNT = 4;
 const INFECTED_COUNT = 4;
-const NORMAL_RESOURCE_TILE_POOL: TileType[] = [
-  ...repeatTile("farm", 6),
-  ...repeatTile("forest", 6),
-  ...repeatTile("factory", 6),
-  ...repeatTile("city", 6),
-  ...repeatTile("military", 6)
-];
-const RESOURCE_TILE_COUNT = NORMAL_RESOURCE_TILE_POOL.length + WAREHOUSE_COUNT + INFECTED_COUNT;
+const NORMAL_RESOURCE_TYPES: TileType[] = ["factory", "farm", "military", "forest", "city"];
+const NORMAL_RESOURCE_TARGET_WEIGHTS: Record<TileType, number> = {
+  factory: 24,
+  farm: 22,
+  military: 20,
+  forest: 19,
+  city: 15,
+  warehouse: 0,
+  infected: 0,
+  empty: 0
+};
+const MIN_NORMAL_RESOURCE_TILE_COUNT = 30;
+const MIN_RESOURCE_ZONE_TILE_COUNT = MIN_NORMAL_RESOURCE_TILE_COUNT + WAREHOUSE_COUNT + INFECTED_COUNT;
+const EXTRA_NUMBER_SEQUENCE = [5, 9, 4, 10, 3, 11, 2, 12];
+const STRUCTURE_BUILD_ATTEMPTS = 700;
 
 function repeatTile(type: TileType, count: number): TileType[] {
   return Array.from({ length: count }, () => type);
@@ -169,30 +206,47 @@ export function tileResource(tile: TileState): keyof Resources | undefined {
   return TILE_RESOURCE[tile.hiddenType];
 }
 
-export function createStandardBoard(seed = `board-${Date.now()}-${Math.random()}`): BoardState {
+export function createStandardBoard(
+  seed = `board-${Date.now()}-${Math.random()}`,
+  options: CreateStandardBoardOptions = {}
+): BoardState {
   let rng: RngState = { seed: `board:${seed}`, counter: 1 };
-  const [structureIndex, structureRng] = randomInt(rng, BOARD_STRUCTURES.length);
+  const selectableStructures = BOARD_STRUCTURES.filter(
+    (structure) =>
+      BOARD_STRUCTURES.length === 1 || structureSignature(structure) !== options.avoidStructureSignature
+  );
+  const [structureIndex, structureRng] = randomInt(rng, selectableStructures.length);
   rng = structureRng;
-  const structure = BOARD_STRUCTURES[structureIndex];
-  const roles = parseStructureRows(structure);
+  const structures = [
+    ...selectableStructures.slice(structureIndex),
+    ...selectableStructures.slice(0, structureIndex)
+  ];
 
-  for (let attempt = 0; attempt < 500; attempt += 1) {
-    const result = buildTileTypes(roles, structure, rng);
-    if (!result) continue;
-    const [tileTypes, nextRng] = result;
-    rng = nextRng;
+  for (const structure of structures) {
+    const roles = parseStructureRows(structure);
 
-    try {
-      const board = buildBoardFromTileTypes(roles, structure, tileTypes);
-      rng = assignNumbers(board, rng);
-      rng = assignBlackMarkets(board, rng);
-      if (validateStandardBoard(board).length === 0) return board;
-    } catch {
-      // Try another resource/number distribution for the same structure.
+    for (let attempt = 0; attempt < STRUCTURE_BUILD_ATTEMPTS; attempt += 1) {
+      const result = buildTileTypes(roles, structure, rng);
+      if (!result) continue;
+      const [tileTypes, nextRng] = result;
+      rng = nextRng;
+
+      try {
+        const board = buildBoardFromTileTypes(roles, structure, tileTypes);
+        rng = assignNumbers(board, rng);
+        rng = assignBlackMarkets(board, rng);
+        if (validateStandardBoard(board).length === 0) return board;
+      } catch {
+        // Try another resource/number distribution for the same structure.
+      }
     }
   }
 
   throw new Error("Unable to generate a valid random wasteland map.");
+}
+
+function structureSignature(structure: BoardStructure): string {
+  return structure.rows.join("|");
 }
 
 function parseStructureRows(structure: BoardStructure): BoardCluster[][] {
@@ -209,8 +263,8 @@ function parseStructureRows(structure: BoardStructure): BoardCluster[][] {
   });
 
   const resourceCellCount = roles.flat().filter((role) => role !== "empty").length;
-  if (resourceCellCount !== RESOURCE_TILE_COUNT) {
-    throw new Error(`Board structure ${structure.id} must have ${RESOURCE_TILE_COUNT} resource cells.`);
+  if (resourceCellCount < MIN_RESOURCE_ZONE_TILE_COUNT) {
+    throw new Error(`Board structure ${structure.id} must have at least ${MIN_RESOURCE_ZONE_TILE_COUNT} resource cells.`);
   }
 
   return roles;
@@ -224,12 +278,11 @@ function buildTileTypes(
   let nextRng = rng;
   const cells = resourceCells(roles);
   const smallCells = cells.filter((cell) => cell.role === "small");
-  const largeCells = cells.filter((cell) => cell.role === "large");
 
   const [smallWarehouseCandidates, smallRng] = shuffle(smallCells, nextRng);
-  const [largeWarehouseCandidates, largeRng] = shuffle(largeCells, smallRng);
-  nextRng = largeRng;
-  const warehouseCells = pickNonAdjacentCells([...smallWarehouseCandidates, ...largeWarehouseCandidates], WAREHOUSE_COUNT);
+  const smallWarehouseCells = pickNonAdjacentCells(smallWarehouseCandidates, WAREHOUSE_COUNT);
+  nextRng = smallRng;
+  const warehouseCells = smallWarehouseCells;
   if (warehouseCells.length !== WAREHOUSE_COUNT) return undefined;
 
   const warehouseKeys = new Set(warehouseCells.map(cellKey));
@@ -253,10 +306,9 @@ function buildTileTypes(
   infectedCells.forEach((cell) => infectedKeys.add(cellKey(cell)));
 
   const normalCells = cells.filter((cell) => !warehouseKeys.has(cellKey(cell)) && !infectedKeys.has(cellKey(cell)));
-  if (normalCells.length !== NORMAL_RESOURCE_TILE_POOL.length) return undefined;
-
-  const [shuffledNormalCells, normalCellRng] = shuffle(normalCells, nextRng);
-  const [shuffledNormalTypes, normalTypeRng] = shuffle(NORMAL_RESOURCE_TILE_POOL, normalCellRng);
+  const normalAssignments = assignNormalResourceTypes(roles, normalCells, nextRng);
+  if (!normalAssignments) return undefined;
+  const [normalTypesByCell, normalTypeRng] = normalAssignments;
   nextRng = normalTypeRng;
 
   const tileTypes = roles.map((row) => row.map(() => "empty" as TileType));
@@ -266,11 +318,247 @@ function buildTileTypes(
   infectedCells.forEach((cell) => {
     tileTypes[cell.row][cell.col] = "infected";
   });
-  shuffledNormalCells.forEach((cell, index) => {
-    tileTypes[cell.row][cell.col] = shuffledNormalTypes[index];
+  normalCells.forEach((cell) => {
+    const type = normalTypesByCell.get(cellKey(cell));
+    if (type) tileTypes[cell.row][cell.col] = type;
   });
 
   return [tileTypes, nextRng];
+}
+
+function assignNormalResourceTypes(
+  roles: BoardCluster[][],
+  normalCells: BoardCell[],
+  rng: RngState
+): [Map<string, TileType>, RngState] | undefined {
+  let nextRng = rng;
+  const initialComponents = initialResourceCellComponents(roles);
+  const normalCellKeys = new Set(normalCells.map(cellKey));
+
+  for (let attempt = 0; attempt < 400; attempt += 1) {
+    let attemptRng = nextRng;
+    const targetCounts = normalResourceTargetCounts(normalCells.length);
+    const assignments = new Map<string, TileType>();
+    let valid = true;
+
+    for (const component of initialComponents) {
+      const componentNormalCells = component.filter((cell) => normalCellKeys.has(cellKey(cell)));
+      if (componentNormalCells.length < NORMAL_RESOURCE_TYPES.length * 2) {
+        valid = false;
+        break;
+      }
+
+      let shuffledCells: BoardCell[];
+      [shuffledCells, attemptRng] = shuffle(componentNormalCells, attemptRng);
+      let shuffledInitialTypes: TileType[];
+      [shuffledInitialTypes, attemptRng] = shuffle(NORMAL_RESOURCE_TYPES, attemptRng);
+
+      for (const type of shuffledInitialTypes) {
+        if (targetCounts[type] < 2) {
+          valid = false;
+          break;
+        }
+
+        for (let index = 0; index < 2; index += 1) {
+          const candidateIndex = shuffledCells.findIndex((cell) =>
+            !assignments.has(cellKey(cell)) && canAssignNormalResource(normalCells, assignments, cell, type)
+          );
+          if (candidateIndex < 0) {
+            valid = false;
+            break;
+          }
+
+          const [cell] = shuffledCells.splice(candidateIndex, 1);
+          assignments.set(cellKey(cell), type);
+          targetCounts[type] -= 1;
+        }
+
+        if (!valid) break;
+      }
+
+      if (!valid) break;
+    }
+
+    if (!valid) {
+      nextRng = attemptRng;
+      continue;
+    }
+
+    const remainingCells = normalCells.filter((cell) => !assignments.has(cellKey(cell)));
+    const remainingTypes = normalResourcePoolFromCounts(targetCounts);
+    if (remainingCells.length !== remainingTypes.length) {
+      nextRng = attemptRng;
+      continue;
+    }
+
+    let shuffledRemainingCells: BoardCell[];
+    [shuffledRemainingCells, attemptRng] = shuffle(remainingCells, attemptRng);
+    let shuffledRemainingTypes: TileType[];
+    [shuffledRemainingTypes, attemptRng] = shuffle(remainingTypes, attemptRng);
+
+    for (const type of shuffledRemainingTypes) {
+      const candidateIndex = shuffledRemainingCells.findIndex((cell) =>
+        canAssignNormalResource(normalCells, assignments, cell, type)
+      );
+      if (candidateIndex < 0) {
+        valid = false;
+        break;
+      }
+
+      const [cell] = shuffledRemainingCells.splice(candidateIndex, 1);
+      assignments.set(cellKey(cell), type);
+    }
+
+    if (valid && normalResourceAssignmentValid(normalCells, assignments)) {
+      return [assignments, attemptRng];
+    }
+
+    nextRng = attemptRng;
+  }
+
+  return undefined;
+}
+
+function normalResourceTargetCounts(count: number): Record<TileType, number> {
+  const base = NORMAL_RESOURCE_TYPES.reduce<Record<TileType, number>>(
+    (acc, type) => {
+      acc[type] = Math.floor((count * NORMAL_RESOURCE_TARGET_WEIGHTS[type]) / 100);
+      return acc;
+    },
+    { farm: 0, forest: 0, factory: 0, city: 0, military: 0, warehouse: 0, infected: 0, empty: 0 }
+  );
+  const allocated = NORMAL_RESOURCE_TYPES.reduce((total, type) => total + base[type], 0);
+  const remainders = NORMAL_RESOURCE_TYPES.map((type) => ({
+    type,
+    remainder: (count * NORMAL_RESOURCE_TARGET_WEIGHTS[type]) / 100 - base[type]
+  })).sort((a, b) => b.remainder - a.remainder);
+
+  for (let index = 0; index < count - allocated; index += 1) {
+    base[remainders[index % remainders.length].type] += 1;
+  }
+
+  return base;
+}
+
+function normalResourcePoolFromCounts(counts: Record<TileType, number>): TileType[] {
+  return NORMAL_RESOURCE_TYPES.flatMap((type) => repeatTile(type, counts[type]));
+}
+
+function initialResourceCellComponents(roles: BoardCluster[][]): BoardCell[][] {
+  const largeCells = resourceCells(roles).filter((cell) => cell.role === "large");
+  if (largeCells.length === 0) return [];
+  return cellComponents(largeCells);
+}
+
+function cellComponents(cells: BoardCell[]): BoardCell[][] {
+  const cellsByKey = new Map(cells.map((cell) => [cellKey(cell), cell]));
+  const remaining = new Set(cellsByKey.keys());
+  const components: BoardCell[][] = [];
+
+  while (remaining.size > 0) {
+    const startKey = [...remaining][0];
+    const component: BoardCell[] = [];
+    const stack = [startKey];
+    remaining.delete(startKey);
+
+    while (stack.length > 0) {
+      const key = stack.pop()!;
+      const cell = cellsByKey.get(key);
+      if (!cell) continue;
+      component.push(cell);
+
+      cells.forEach((candidate) => {
+        const candidateKey = cellKey(candidate);
+        if (!remaining.has(candidateKey) || !cellsAreAdjacent(cell, candidate)) return;
+        remaining.delete(candidateKey);
+        stack.push(candidateKey);
+      });
+    }
+
+    components.push(component);
+  }
+
+  return components;
+}
+
+function normalResourceAssignmentValid(normalCells: BoardCell[], assignments: Map<string, TileType>): boolean {
+  const cellsByKey = new Map(normalCells.map((cell) => [cellKey(cell), cell]));
+  const remaining = new Set(cellsByKey.keys());
+
+  while (remaining.size > 0) {
+    const startKey = [...remaining][0];
+    const type = assignments.get(startKey);
+    const stack = [startKey];
+    const component: string[] = [];
+    remaining.delete(startKey);
+
+    while (stack.length > 0) {
+      const key = stack.pop()!;
+      const cell = cellsByKey.get(key);
+      if (!cell) continue;
+      component.push(key);
+
+      normalCells.forEach((candidate) => {
+        const candidateKey = cellKey(candidate);
+        if (
+          !remaining.has(candidateKey) ||
+          assignments.get(candidateKey) !== type ||
+          !cellsAreAdjacent(cell, candidate)
+        ) {
+          return;
+        }
+        remaining.delete(candidateKey);
+        stack.push(candidateKey);
+      });
+    }
+
+    if (component.length > 2) return false;
+  }
+
+  return true;
+}
+
+function canAssignNormalResource(
+  normalCells: BoardCell[],
+  assignments: Map<string, TileType>,
+  cell: BoardCell,
+  type: TileType
+): boolean {
+  const key = cellKey(cell);
+  if (assignments.has(key)) return false;
+  assignments.set(key, type);
+  const size = normalResourceComponentSize(normalCells, assignments, cell, type);
+  assignments.delete(key);
+  return size <= 2;
+}
+
+function normalResourceComponentSize(
+  normalCells: BoardCell[],
+  assignments: Map<string, TileType>,
+  start: BoardCell,
+  type: TileType
+): number {
+  const cellsByKey = new Map(normalCells.map((cell) => [cellKey(cell), cell]));
+  const visited = new Set<string>();
+  const stack = [cellKey(start)];
+
+  while (stack.length > 0) {
+    const key = stack.pop()!;
+    if (visited.has(key) || assignments.get(key) !== type) continue;
+    visited.add(key);
+    const cell = cellsByKey.get(key);
+    if (!cell) continue;
+
+    normalCells.forEach((candidate) => {
+      const candidateKey = cellKey(candidate);
+      if (visited.has(candidateKey) || assignments.get(candidateKey) !== type || !cellsAreAdjacent(cell, candidate)) {
+        return;
+      }
+      stack.push(candidateKey);
+    });
+  }
+
+  return visited.size;
 }
 
 function resourceCells(roles: BoardCluster[][]): BoardCell[] {
@@ -386,7 +674,7 @@ function buildBoardFromTileTypes(
     edge.vertexIds.forEach((id) => vertices[id].edgeIds.push(edge.id));
   });
 
-  return { tiles, edges, vertices, rows };
+  return { tiles, edges, vertices, rows, structureId: structure.id, structureSignature: structureSignature(structure) };
 }
 
 function assignNumbers(board: BoardState, rng: RngState): RngState {
@@ -431,6 +719,9 @@ function assignNumbers(board: BoardState, rng: RngState): RngState {
   });
 
   const remainingNumbers = [...NUMBER_POOL];
+  while (remainingNumbers.length < resourceTiles.length) {
+    remainingNumbers.push(EXTRA_NUMBER_SEQUENCE[(remainingNumbers.length - NUMBER_POOL.length) % EXTRA_NUMBER_SEQUENCE.length]);
+  }
   assignedNumbers.forEach((number) => {
     const index = remainingNumbers.indexOf(number);
     if (index >= 0) remainingNumbers.splice(index, 1);
@@ -814,21 +1105,23 @@ export function validateStandardBoard(board: BoardState): string[] {
       empty: 0
     }
   );
-  const expected: Partial<Record<TileType, number>> = {
-    farm: 6,
-    forest: 6,
-    factory: 6,
-    city: 6,
-    military: 6,
-    warehouse: 4,
-    infected: 4,
-    empty: 34
-  };
-  Object.entries(expected).forEach(([type, count]) => {
-    if (counts[type as TileType] !== count) {
-      errors.push(`${type} count should be ${count}, got ${counts[type as TileType]}.`);
+  const normalResourceTileCount = NORMAL_RESOURCE_TYPES.reduce((total, type) => total + counts[type], 0);
+  const expectedNormalCounts = normalResourceTargetCounts(normalResourceTileCount);
+  NORMAL_RESOURCE_TYPES.forEach((type) => {
+    if (counts[type] !== expectedNormalCounts[type]) {
+      errors.push(`${type} count should be ${expectedNormalCounts[type]}, got ${counts[type]}.`);
     }
   });
+  if (counts.warehouse !== WAREHOUSE_COUNT) {
+    errors.push(`warehouse count should be ${WAREHOUSE_COUNT}, got ${counts.warehouse}.`);
+  }
+  if (counts.infected !== INFECTED_COUNT) {
+    errors.push(`infected count should be ${INFECTED_COUNT}, got ${counts.infected}.`);
+  }
+  const resourceZoneTileCount = tiles.filter((tile) => tile.cluster !== "empty").length;
+  if (counts.empty !== tiles.length - resourceZoneTileCount) {
+    errors.push(`empty count should be ${tiles.length - resourceZoneTileCount}, got ${counts.empty}.`);
+  }
 
   tiles.forEach((tile) => {
     if (tile.hiddenType === "warehouse" && (tile.number === 6 || tile.number === 8)) {
@@ -856,8 +1149,159 @@ export function validateStandardBoard(board: BoardState): string[] {
   });
 
   const numberCount = tiles.filter((tile) => tile.number !== undefined).length;
-  if (numberCount !== 34) errors.push(`Map should have 34 number tokens, got ${numberCount}.`);
+  const expectedNumberCount = tiles.filter(isResourceTile).length;
+  if (numberCount !== expectedNumberCount) {
+    errors.push(`Map should have ${expectedNumberCount} number tokens, got ${numberCount}.`);
+  }
+  errors.push(...validateEmptyWastelandSpacing(board));
+  errors.push(...validateLandingZoneSeparation(board));
+  errors.push(...validateInitialResourceMix(board));
+  errors.push(...validateNormalResourceAdjacency(board));
   return [...new Set(errors)];
+}
+
+function validateInitialResourceMix(board: BoardState): string[] {
+  const largeComponents = resourceClusterComponents(board, "large");
+  if (largeComponents.length === 0) return [];
+
+  const errors: string[] = [];
+  largeComponents.forEach((component, index) => {
+    const countsByType = NORMAL_RESOURCE_TYPES.reduce<Record<TileType, number>>(
+      (acc, type) => {
+        acc[type] = component.filter((tileIdValue) => board.tiles[tileIdValue].hiddenType === type).length;
+        return acc;
+      },
+      { farm: 0, forest: 0, factory: 0, city: 0, military: 0, warehouse: 0, infected: 0, empty: 0 }
+    );
+
+    NORMAL_RESOURCE_TYPES.forEach((type) => {
+      if (countsByType[type] < 2) {
+        errors.push(`Initial resource zone ${index + 1} should have at least 2 ${type} tiles, got ${countsByType[type]}.`);
+      }
+    });
+  });
+
+  return errors;
+}
+
+function validateNormalResourceAdjacency(board: BoardState): string[] {
+  const normalTilesById = new Map(
+    Object.values(board.tiles)
+      .filter((tile) => NORMAL_RESOURCE_TYPES.includes(tile.hiddenType))
+      .map((tile) => [tile.id, tile])
+  );
+  const remaining = new Set(normalTilesById.keys());
+  const errors: string[] = [];
+
+  while (remaining.size > 0) {
+    const start = [...remaining][0];
+    const type = board.tiles[start].hiddenType;
+    const component: string[] = [];
+    const stack = [start];
+    remaining.delete(start);
+
+    while (stack.length > 0) {
+      const tileIdValue = stack.pop()!;
+      component.push(tileIdValue);
+      adjacentTileIds(board, tileIdValue).forEach((adjacentId) => {
+        if (!remaining.has(adjacentId) || board.tiles[adjacentId].hiddenType !== type) return;
+        remaining.delete(adjacentId);
+        stack.push(adjacentId);
+      });
+    }
+
+    if (component.length > 2) {
+      errors.push(`${type} resource cluster should have at most 2 adjacent tiles, got ${component.length}.`);
+    }
+  }
+
+  return errors;
+}
+
+function validateLandingZoneSeparation(board: BoardState): string[] {
+  const largeComponents = resourceClusterComponents(board, "large");
+  if (largeComponents.length < 2) return [];
+
+  const errors: string[] = [];
+  Object.values(board.tiles)
+    .filter((tile) => tile.cluster === "large")
+    .forEach((tile) => {
+      adjacentTileIds(board, tile.id).forEach((adjacentId) => {
+        const adjacent = board.tiles[adjacentId];
+        if (adjacent.cluster === "small") {
+          errors.push("Landing resource zones should not directly connect to initial large resource zones.");
+        }
+      });
+    });
+
+  return errors;
+}
+
+function validateEmptyWastelandSpacing(board: BoardState): string[] {
+  const maxEmptyDistance = maxDistanceToResourceZone(board);
+  return maxEmptyDistance > 2
+    ? [`Empty wasteland bands should be at most 2 tiles from a resource zone, got ${maxEmptyDistance}.`]
+    : [];
+}
+
+function maxDistanceToResourceZone(board: BoardState): number {
+  const queue: string[] = [];
+  const distances = new Map<string, number>();
+
+  Object.values(board.tiles).forEach((tile) => {
+    if (tile.cluster !== "empty") {
+      distances.set(tile.id, 0);
+      queue.push(tile.id);
+    }
+  });
+
+  for (let index = 0; index < queue.length; index += 1) {
+    const tileIdValue = queue[index];
+    const distance = distances.get(tileIdValue) ?? 0;
+    adjacentTileIds(board, tileIdValue).forEach((adjacentId) => {
+      if (distances.has(adjacentId)) return;
+      distances.set(adjacentId, distance + 1);
+      queue.push(adjacentId);
+    });
+  }
+
+  return Math.max(
+    0,
+    ...Object.values(board.tiles)
+      .filter((tile) => tile.cluster === "empty")
+      .map((tile) => distances.get(tile.id) ?? 0)
+  );
+}
+
+function resourceClusterComponents(board: BoardState, cluster: "large" | "small" | "resource"): string[][] {
+  const remaining = new Set(
+    Object.values(board.tiles)
+      .filter((tile) => (cluster === "resource" ? tile.cluster !== "empty" : tile.cluster === cluster))
+      .map((tile) => tile.id)
+  );
+  const components: string[][] = [];
+
+  while (remaining.size > 0) {
+    const start = [...remaining][0];
+    const component: string[] = [];
+    const stack = [start];
+    remaining.delete(start);
+
+    while (stack.length > 0) {
+      const tileIdValue = stack.pop()!;
+      component.push(tileIdValue);
+      adjacentTileIds(board, tileIdValue)
+        .filter((adjacentId) => remaining.has(adjacentId))
+        .forEach((adjacentId) => {
+          remaining.delete(adjacentId);
+          stack.push(adjacentId);
+        });
+    }
+
+    components.push(component);
+  }
+
+  return components;
 }
 
 export function resourceCount(resources: Partial<Resources>): number {

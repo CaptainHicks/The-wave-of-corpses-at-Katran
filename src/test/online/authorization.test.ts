@@ -52,6 +52,26 @@ describe("authorizeCommandForPlayer", () => {
     });
   });
 
+  it("allows only the active player to submit a timeout command", () => {
+    const state = createActionState();
+
+    expectAuthorized(state, "p1", {
+      type: "timeoutTurn",
+      expectedPlayerId: "p1",
+      expectedTurn: state.turn
+    });
+    expectRejected(state, "p2", {
+      type: "timeoutTurn",
+      expectedPlayerId: "p1",
+      expectedTurn: state.turn
+    });
+    expectRejected(state, "p1", {
+      type: "timeoutTurn",
+      expectedPlayerId: "p2",
+      expectedTurn: state.turn
+    });
+  });
+
   it("allows only the pending player to resolve a pending action", () => {
     const base = createActionState();
     const pendingState = applyCommand(base, {
@@ -87,6 +107,8 @@ describe("authorizeCommandForPlayer", () => {
       resources: createResources({ food: 99 })
     });
     expectRejected(state, "p1", { type: "debugJumpPhase", phase: "victory" });
+    expectRejected(state, "p1", { type: "debugAdvanceZombieTrack" });
+    expectRejected(state, "p1", { type: "debugRevealAllFog" });
   });
 
   it("rejects forced dice values in online play", () => {

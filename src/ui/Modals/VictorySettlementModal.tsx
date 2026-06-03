@@ -90,6 +90,7 @@ function scoreSummary(score: ScoreBreakdown): string {
     score.strongestMilitia > 0 ? `最强民兵 ${score.strongestMilitia}` : "",
     score.secretBases > 0 ? `秘密据点 ${score.secretBases}` : "",
     score.defenderTokens > 0 ? `保卫者 ${score.defenderTokens}` : "",
+    score.newResourceZones > 0 ? `新资源区 ${score.newResourceZones}` : "",
     score.merchant > 0 ? `商人 ${score.merchant}` : ""
   ].filter(Boolean);
 

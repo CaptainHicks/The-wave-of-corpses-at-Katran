@@ -432,7 +432,7 @@ export function DevCardHand({
     }
     if (card.type === "militiaMobilization") {
       setTool("none");
-      setSelection({ kind: "devMilitia", cardId: card.id });
+      setSelection({ kind: "devMilitia", cardId: card.id, vertexIds: [] });
       return true;
     }
     if (card.type === "roadCrew") {

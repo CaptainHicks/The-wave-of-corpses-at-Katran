@@ -1,5 +1,5 @@
-import { Flag, Menu, Skull, X } from "lucide-react";
-import { useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { Compass, Flag, Menu, PauseCircle, Skull, X } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { createPortal } from "react-dom";
 import type { Command, GameState, RouteType } from "../../domain/types";
 import { BuildAction } from "../Actions/BuildAction";
@@ -34,12 +34,15 @@ export function RightOperationDock({
   interactionMode,
   onlineRoomCode,
   onlineConnectionState,
+  turnTimeRemaining,
+  turnTimeLimit,
   animationBusy,
+  commandBusy = false,
   submit,
   setTool,
   setSelection,
   onClear,
-  onImportState,
+  onReconnectOnlineRoom,
   onLeaveOnlineRoom
 }: {
   state: GameState;
@@ -51,12 +54,15 @@ export function RightOperationDock({
   interactionMode: InteractionMode;
   onlineRoomCode?: string;
   onlineConnectionState?: "disconnected" | "connecting" | "connected" | "reconnecting";
+  turnTimeRemaining?: number;
+  turnTimeLimit?: number;
   animationBusy: boolean;
+  commandBusy?: boolean;
   submit: (command: Command) => void;
   setTool: (tool: UiTool) => void;
   setSelection: Dispatch<SetStateAction<UiSelection | undefined>>;
   onClear: () => void;
-  onImportState: (state: GameState) => void;
+  onReconnectOnlineRoom?: () => void;
   onLeaveOnlineRoom?: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<ActionTab>("trade");
@@ -96,12 +102,24 @@ export function RightOperationDock({
     }
   }, [dockContextKey, mode, setSelection, setTool, state]);
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setShowSystemMenu((visible) => !visible);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   return (
     <aside className="right-operation-dock" data-mode={mode} aria-label="右侧操作窗口">
       <section className="panel dock-title">
         <span>{modeText(mode)} · {phaseLabels[state.phase]}</span>
         <strong>{currentPlayer?.name}</strong>
       </section>
+
+      <TurnTimerPanel remaining={turnTimeRemaining} limit={turnTimeLimit} activePlayerName={waitingPlayer?.name} />
 
       <div className="dock-utility-row" aria-label="快捷菜单">
         <button type="button" className="panel dock-mini-button dock-cost-button" onClick={() => setShowBuildCost(true)}>
@@ -172,6 +190,7 @@ export function RightOperationDock({
         state={state}
         mode={mode}
         animationBusy={animationBusy}
+        commandBusy={commandBusy}
         interactionLocked={!canInteract && interactionMode === "online" && mode !== "victory"}
         lockedSubtitle={`${waitingPlayer?.name ?? "其他玩家"} 正在行动`}
         submit={submit}
@@ -200,11 +219,17 @@ export function RightOperationDock({
               if (event.target === event.currentTarget) setShowSystemMenu(false);
             }}
           >
-            <section className="themed-modal system-menu-modal" role="dialog" aria-modal="true" aria-labelledby="system-menu-title">
+            <section
+              className={interactionMode === "online" ? "themed-modal system-menu-modal online-pause-modal" : "themed-modal system-menu-modal"}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="system-menu-title"
+            >
               <header className="system-menu-header">
-                <div>
-                  <span className="system-menu-kicker">系统</span>
-                  <h2 id="system-menu-title">系统菜单</h2>
+                {interactionMode === "online" ? <PauseCircle size={58} aria-hidden="true" /> : <Compass size={58} aria-hidden="true" />}
+                <div className="system-menu-header-copy">
+                  <h2 id="system-menu-title">{interactionMode === "online" ? "暂停菜单" : "系统菜单"}</h2>
+                  <p>{interactionMode === "online" ? "当前正在进行在线对局" : "调整设置或管理当前对局"}</p>
                 </div>
                 <button
                   type="button"
@@ -219,13 +244,15 @@ export function RightOperationDock({
                 <OnlineRoomPanel
                   roomCode={onlineRoomCode}
                   connectionState={onlineConnectionState}
+                  onClose={() => setShowSystemMenu(false)}
+                  onReconnect={onReconnectOnlineRoom}
                   onLeaveRoom={onLeaveOnlineRoom}
                 />
               ) : (
                 <PersistencePanel
                   state={state}
+                  onClose={() => setShowSystemMenu(false)}
                   onClear={onClear}
-                  onImportState={onImportState}
                   submit={submit}
                   setTool={setTool}
                 />
@@ -252,6 +279,36 @@ function SetupAction({ tool, setTool }: { tool: UiTool; setTool: (tool: UiTool) 
       </button>
     </section>
   );
+}
+
+function TurnTimerPanel({
+  remaining,
+  limit,
+  activePlayerName
+}: {
+  remaining?: number;
+  limit?: number;
+  activePlayerName?: string;
+}) {
+  if (remaining == null || limit == null || limit <= 0) return null;
+  const progress = Math.max(0, Math.min(1, remaining / limit));
+
+  return (
+    <section className="panel turn-timer-card" aria-label="操作倒计时">
+      <div>
+        <span>操作倒计时</span>
+        <strong>{formatTimer(remaining)}</strong>
+      </div>
+      <p>{activePlayerName ?? "当前玩家"} 超时后系统自动托管。</p>
+      <div className="turn-timer-track" aria-hidden="true">
+        <i style={{ width: `${progress * 100}%` }} />
+      </div>
+    </section>
+  );
+}
+
+function formatTimer(seconds: number): string {
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
 function SelectionPanel({
@@ -313,8 +370,22 @@ function SelectionPanel({
     return (
       <div className="selection-panel dock-selection-panel">
         <strong>民兵动员</strong>
-        <p>点击一个己方营地或堡垒部署民兵；每处最多两个。</p>
-        {cancel}
+        <p>点击己方营地或堡垒部署最多两个民兵；每处最多两个。</p>
+        <div className="inline-actions">
+          <button
+            disabled={selection.vertexIds.length === 0}
+            onClick={() =>
+              submit({
+                type: "playDevelopmentCard",
+                cardId: selection.cardId,
+                payload: { vertexIds: selection.vertexIds }
+              })
+            }
+          >
+            使用已选 {selection.vertexIds.length} 个
+          </button>
+          {cancel}
+        </div>
       </div>
     );
   }

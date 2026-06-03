@@ -86,6 +86,8 @@ export interface BoardState {
   edges: Record<string, EdgeState>;
   vertices: Record<string, VertexState>;
   rows: string[][];
+  structureId?: string;
+  structureSignature?: string;
 }
 
 export interface DevCard {
@@ -204,6 +206,7 @@ export interface GameState {
   awards: {
     longestSupply?: { playerId: string; length: number };
     strongestMilitia?: { playerId: string; count: number };
+    newResourceZones?: Record<string, string[]>;
   };
   dice?: [number, number];
   winnerId?: string;
@@ -226,6 +229,7 @@ export type Command =
   | { type: "chooseResource"; resources: Partial<Resources> }
   | { type: "endPhase" }
   | { type: "endTurn" }
+  | { type: "timeoutTurn"; expectedPlayerId?: string; expectedTurn?: number }
   | {
       type: "bankTrade";
       give: Resource;
@@ -257,7 +261,9 @@ export type Command =
   | { type: "playDevelopmentCard"; cardId: string; payload?: Record<string, unknown> }
   | { type: "downgradeFortress"; vertexId: string }
   | { type: "debugSetResources"; playerId: string; resources: Resources }
-  | { type: "debugJumpPhase"; phase: Phase };
+  | { type: "debugJumpPhase"; phase: Phase }
+  | { type: "debugAdvanceZombieTrack" }
+  | { type: "debugRevealAllFog" };
 
 export interface ScoreBreakdown {
   total: number;
@@ -268,4 +274,5 @@ export interface ScoreBreakdown {
   secretBases: number;
   defenderTokens: number;
   merchant: number;
+  newResourceZones: number;
 }

@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import type { CSSProperties, KeyboardEvent, MouseEvent, UIEvent } from "react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { PLAYER_FACTIONS } from "../domain/constants";
+import { PIECE_LIMITS, PLAYER_FACTIONS, VICTORY_POINTS_TO_WIN } from "../domain/constants";
 import type { Command } from "../domain/types";
 import type {
   LobbyView,
@@ -93,6 +93,15 @@ const CONNECTION_TONES: Record<OnlineConnectionState, string> = {
   disconnected: "offline"
 };
 
+const PIECE_LIMIT_RULE_ITEMS = [
+  { label: "营地", value: `${PIECE_LIMITS.camps} 个` },
+  { label: "堡垒", value: `${PIECE_LIMITS.fortresses} 个` },
+  { label: "运输线", value: `${PIECE_LIMITS.transports} 条` },
+  { label: "装甲车队", value: `${PIECE_LIMITS.convoys} 个` },
+  { label: "哨塔", value: `${PIECE_LIMITS.watchtowers} 个` },
+  { label: "民兵", value: `${PIECE_LIMITS.militia} 个` }
+] as const;
+
 const RULE_SECTIONS = [
   { id: "rules-overview", label: "游戏概述" },
   { id: "rules-goal", label: "游戏目标" },
@@ -124,6 +133,11 @@ function getStartStageScale() {
   return Math.max(0.01, Math.min(window.innerWidth / START_STAGE_WIDTH, window.innerHeight / START_STAGE_HEIGHT));
 }
 
+function syncFixedStageScale(scale: number) {
+  if (typeof document === "undefined") return;
+  document.documentElement.style.setProperty("--fixed-stage-scale", String(scale));
+}
+
 export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCreate, online }: StartScreenProps) {
   const [view, setView] = useState<StartMenuView>("main");
   const [stageScale, setStageScale] = useState(getStartStageScale);
@@ -151,7 +165,11 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
   const canCreateLocalGame = selectedLocalFactionIds.every(Boolean);
 
   useLayoutEffect(() => {
-    const handleResize = () => setStageScale(getStartStageScale());
+    const handleResize = () => {
+      const nextScale = getStartStageScale();
+      setStageScale(nextScale);
+      syncFixedStageScale(nextScale);
+    };
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
@@ -343,7 +361,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
       </div>
       <div className="start-mode-frame start-secondary-frame">
         <div className="start-mode-grid">
-        <button className="start-mode-card start-mode-card-active" aria-label="本地热座" onClick={() => setView("setup")}>
+        <button className="start-mode-card" aria-label="本地热座" onClick={() => setView("setup")}>
           <img className="start-mode-card-art" src="/assets/menu/mode-local-hotseat.png" alt="" />
           <span className="start-mode-card-shade" aria-hidden="true" />
           <Users size={46} />
@@ -572,7 +590,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
                 <div>
                   <Dices size={24} />
                   <dt>核心目标</dt>
-                  <dd>率先达到 14 点</dd>
+                  <dd>率先达到 {VICTORY_POINTS_TO_WIN} 点</dd>
                 </div>
                 <div>
                   <Globe2 size={24} />
@@ -592,7 +610,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
             <div className="start-rules-section-title">
               <span className="start-rules-kicker">02 / 目标</span>
               <h3>游戏目标</h3>
-              <p>每位玩家都在争夺胜利点。谁先在自己的回合达到或超过 14 点，谁就赢得这片废土的生存权。</p>
+              <p>每位玩家都在争夺胜利点。谁先在自己的回合达到或超过 {VICTORY_POINTS_TO_WIN} 点，谁就赢得这片废土的生存权。</p>
             </div>
             <div className="start-rules-card-grid two">
               <div className="start-rules-card">
@@ -601,6 +619,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
                 <ul>
                   <li>营地：每个 1 点，堡垒：每个 2 点。</li>
                   <li>最长补给线和最强民兵各价值 2 点。</li>
+                  <li>首次在非起始资源区的新资源区建立营地时，额外获得 1 点；每名玩家每个新资源区最多获得一次。</li>
                   <li>秘密据点、商人控制权、卡坦保卫者都能提供额外胜利点。</li>
                 </ul>
               </div>
@@ -629,7 +648,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
               <li><strong>交易阶段</strong><span>可以与其他玩家交易，也可以按银行、黑市或商人的比例换资源。</span></li>
               <li><strong>建造阶段</strong><span>支付资源建造运输线、装甲车队、营地、堡垒、哨塔、民兵或发展卡。</span></li>
               <li><strong>行动阶段</strong><span>使用已激活民兵驱逐尸潮，或打出本回合允许使用的发展卡。</span></li>
-              <li><strong>检查胜利</strong><span>如果你的胜利点达到 14 点，立即获胜。</span></li>
+              <li><strong>检查胜利</strong><span>如果你的胜利点达到 {VICTORY_POINTS_TO_WIN} 点，立即获胜。</span></li>
             </ol>
           </article>
 
@@ -642,15 +661,25 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
             <div className="start-rules-resource-strip">
               <span>食物：激活民兵、建造营地、升级堡垒</span>
               <span>木材：运输线、营地、哨塔</span>
-              <span>金属：装甲车队、堡垒、民兵、哨塔</span>
-              <span>燃料：运输线、装甲车队、营地</span>
-              <span>弹药：营地、民兵、发展卡</span>
+              <span>金属：运输线、堡垒、民兵、哨塔</span>
+              <span>燃料：装甲车队、营地</span>
+              <span>弹药：装甲车队、营地、民兵、发展卡</span>
+            </div>
+            <div className="start-rules-piece-limits" aria-label="每名玩家棋子上限">
+              <strong>每名玩家棋子上限</strong>
+              <div>
+                {PIECE_LIMIT_RULE_ITEMS.map((item) => (
+                  <span key={item.label}>
+                    {item.label}：{item.value}
+                  </span>
+                ))}
+              </div>
             </div>
             <div className="start-rules-card-grid three">
               <div className="start-rules-card compact">
                 <TowerControl size={28} />
                 <strong>基础建设</strong>
-                <p>运输线：木材×1 + 燃料×1。营地：食物×1 + 木材×1 + 燃料×1 + 弹药×1。</p>
+                <p>运输线：木材×1 + 金属×1。营地：食物×1 + 木材×1 + 燃料×1 + 弹药×1。</p>
               </div>
               <div className="start-rules-card compact">
                 <Shield size={28} />
@@ -660,7 +689,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
               <div className="start-rules-card compact">
                 <Radio size={28} />
                 <strong>战术单位</strong>
-                <p>装甲车队：金属×1 + 燃料×1。民兵：金属×1 + 弹药×1，激活民兵需食物×1。</p>
+                <p>装甲车队：弹药×1 + 燃料×1。民兵：金属×1 + 弹药×1，激活民兵需食物×1。</p>
               </div>
             </div>
           </article>
@@ -758,7 +787,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
             <div className="start-rules-callout-row">
               <div>
                 <strong>快速获胜路线</strong>
-                <p>营地扩张、堡垒升级、最长补给线、最强民兵、商人和秘密据点可以组合推进。不要让一种路线被尸潮完全封死。</p>
+                <p>营地扩张、登陆新资源区、堡垒升级、最长补给线、最强民兵、商人和秘密据点可以组合推进。不要让一种路线被尸潮完全封死。</p>
               </div>
               <div>
                 <strong>常见失败原因</strong>

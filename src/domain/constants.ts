@@ -49,17 +49,17 @@ export const EMPTY_RESOURCES: Resources = {
 };
 
 export const PIECE_LIMITS = {
-  camps: 6,
-  fortresses: 5,
+  camps: 5,
+  fortresses: 4,
   transports: 15,
-  convoys: 15,
-  militia: 9,
-  watchtowers: 3
+  convoys: 10,
+  militia: 12,
+  watchtowers: 4
 };
 
 export const COSTS: Record<string, Partial<Resources>> = {
-  transport: { wood: 1, fuel: 1 },
-  convoy: { metal: 1, fuel: 1 },
+  transport: { wood: 1, metal: 1 },
+  convoy: { ammo: 1, fuel: 1 },
   camp: { food: 1, wood: 1, fuel: 1, ammo: 1 },
   fortress: { food: 2, metal: 3 },
   watchtower: { metal: 1, wood: 1 },
@@ -106,13 +106,13 @@ export const NUMBER_POOL = [
 ];
 
 export const DEV_CARD_COUNTS: Record<DevCardType, number> = {
-  militiaMobilization: 10,
+  militiaMobilization: 6,
   roadCrew: 2,
   airdrop: 2,
   requisition: 2,
-  merchant: 3,
+  merchant: 2,
   secretBase: 5,
-  zombieApproaches: 3
+  zombieApproaches: 4
 };
 
 export const DEV_CARD_LABELS: Record<DevCardType, string> = {
@@ -125,7 +125,7 @@ export const DEV_CARD_LABELS: Record<DevCardType, string> = {
   zombieApproaches: "尸潮逼近"
 };
 
-export const VICTORY_POINTS_TO_WIN = 14;
+export const VICTORY_POINTS_TO_WIN = 12;
 export const BASE_HAND_LIMIT = 7;
 export const WATCHTOWER_HAND_BONUS = 2;
 export const ZOMBIE_TRACK_LIMIT = 6;

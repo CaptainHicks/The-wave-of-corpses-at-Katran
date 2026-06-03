@@ -175,6 +175,7 @@ export function BoardView({
   const selectedDevRouteEdgeSet = new Set(
     selection?.kind === "devRoadCrew" ? selection.routes.map((route) => route.edgeId) : []
   );
+  const selectedDevMilitiaVertexIds = selection?.kind === "devMilitia" ? selection.vertexIds : [];
   const canUseNormalBoardTools = canInteract && !state.pending && state.phase === "action";
   const actingPlayerId = canInteract ? state.pending?.playerId ?? state.currentPlayerId : undefined;
   const actingPlayer = state.players.find((player) => player.id === actingPlayerId);
@@ -481,7 +482,18 @@ export function BoardView({
         reportError?.("这张卡只能把民兵部署到自己的营地或堡垒。");
         return;
       }
-      submit({ type: "playDevelopmentCard", cardId: selection.cardId, payload: { vertexId } });
+      const stationedCount = actingPlayer?.militia.filter((militia) => militia.vertexId === vertexId).length ?? 0;
+      const selectedCount = selectedDevMilitiaVertexIds.filter((selectedVertexId) => selectedVertexId === vertexId).length;
+      if (stationedCount + selectedCount >= 2) {
+        reportError?.("每处营地或堡垒最多驻守2个民兵。");
+        return;
+      }
+      const vertexIds = [...selection.vertexIds, vertexId];
+      if (vertexIds.length >= 2) {
+        submit({ type: "playDevelopmentCard", cardId: selection.cardId, payload: { vertexIds } });
+      } else {
+        setSelection({ ...selection, vertexIds });
+      }
       return;
     }
     if (state.pending?.kind === "downgradeFortress") {
@@ -544,7 +556,14 @@ export function BoardView({
   };
 
   return (
-    <svg className="board-svg" viewBox={`${bounds.minX} ${bounds.minY} ${bounds.width} ${bounds.height}`}>
+    <svg
+      className="board-svg"
+      viewBox={`${bounds.minX} ${bounds.minY} ${bounds.width} ${bounds.height}`}
+      onClick={(event) => {
+        if (event.target !== event.currentTarget || !selection) return;
+        setSelection(undefined);
+      }}
+    >
       <defs>
         <pattern id="fog" width="10" height="10" patternUnits="userSpaceOnUse">
           <rect width="10" height="10" fill="#60666a" />
@@ -580,10 +599,12 @@ export function BoardView({
                 ? "transport"
                 : canUseNormalBoardTools && tool === "convoy" && legalConvoyEdges.has(edge.id)
                   ? "convoy"
-                  : queuedRouteType ??
-                    (selection?.kind === "devRoadCrew" && legalDevRouteEdgeSet.has(edge.id)
-                      ? selection.routeType
-                      : undefined);
+                  : selection?.kind === "moveConvoy" && selection.fromEdgeId && legalMoveConvoyToSet.has(edge.id)
+                    ? "convoy"
+                    : queuedRouteType ??
+                      (selection?.kind === "devRoadCrew" && legalDevRouteEdgeSet.has(edge.id)
+                        ? selection.routeType
+                        : undefined);
         const isLegal =
           legalInitialRoutes.has(edge.id) ||
           (canUseNormalBoardTools && tool === "transport" && legalTransportEdges.has(edge.id)) ||

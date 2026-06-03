@@ -6,6 +6,9 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { FileRoomStore } from "../../../server/rooms/fileRoomStore.ts";
 import { OnlineRoomError, OnlineRoomService } from "../../../server/rooms/onlineRoomService.ts";
+import { createResources } from "../../domain/constants";
+import { applyCommand, legalBuildEdges, legalInitialCampVertices, legalInitialRouteEdges } from "../../domain/rules";
+import type { GameState } from "../../domain/types";
 import type { RoomStoreTransaction } from "../../../server/rooms/roomStore.ts";
 
 const tempDirs: string[] = [];
@@ -21,6 +24,13 @@ async function createTransactionalService() {
   const rootDir = await mkdtemp(path.join(os.tmpdir(), "zombie-catan-online-room-service-tx-"));
   tempDirs.push(rootDir);
   const store = new TransactionCountingFileStore({ rootDir, now: () => 10_000 });
+  return { service: new OnlineRoomService({ store, now: () => 10_000 }), store };
+}
+
+async function createServiceWithStore() {
+  const rootDir = await mkdtemp(path.join(os.tmpdir(), "zombie-catan-online-room-service-store-"));
+  tempDirs.push(rootDir);
+  const store = new FileRoomStore({ rootDir, now: () => 10_000 });
   return { service: new OnlineRoomService({ store, now: () => 10_000 }), store };
 }
 
@@ -86,7 +96,18 @@ describe("OnlineRoomService", () => {
 
     await expect(
       service.startRoom({ roomCode: host.room.roomCode, viewerPlayerId: host.seat.playerId })
-    ).rejects.toThrow("Every player must choose a faction");
+    ).rejects.toThrow("所有玩家都选择阵营后，房主才能开始游戏。");
+  });
+
+  it("returns localized errors for lobby failures", async () => {
+    const service = await createService();
+    await expect(service.joinRoom({ roomCode: "MISSING", name: "Guest" })).rejects.toThrow("没有找到这个房间。");
+    await expect(service.createRoom({ name: "", targetPlayerCount: 2, fogEnabled: false })).rejects.toThrow(
+      "请输入玩家名称。"
+    );
+    await expect(service.createRoom({ name: "Host", targetPlayerCount: 7, fogEnabled: false })).rejects.toThrow(
+      "在线房间支持 2 到 6 名玩家。"
+    );
   });
 
   it("prevents choosing a faction already claimed by another player but allows changing to an open one", async () => {
@@ -94,7 +115,7 @@ describe("OnlineRoomService", () => {
     const host = await service.createRoom({
       name: "Host",
       targetPlayerCount: 2,
-      fogEnabled: true
+      fogEnabled: false
     });
     const guest = await service.joinRoom({
       roomCode: host.room.roomCode,
@@ -223,6 +244,75 @@ describe("OnlineRoomService", () => {
     ).rejects.toThrow(OnlineRoomError);
   });
 
+  it("uses current route costs when applying online build commands", async () => {
+    const { service, store } = await createServiceWithStore();
+    const host = await service.createRoom({
+      name: "Host",
+      targetPlayerCount: 2,
+      fogEnabled: false
+    });
+    const guest = await service.joinRoom({
+      roomCode: host.room.roomCode,
+      name: "Guest"
+    });
+    await service.chooseFaction({
+      roomCode: host.room.roomCode,
+      playerId: host.seat.playerId,
+      factionId: "red-rust"
+    });
+    await service.chooseFaction({
+      roomCode: host.room.roomCode,
+      playerId: guest.seat.playerId,
+      factionId: "blue-steel"
+    });
+    const room = await service.startRoom({
+      roomCode: host.room.roomCode,
+      viewerPlayerId: host.seat.playerId
+    });
+
+    let state = advanceToAction(room.gameState!);
+    state = applyCommand(state, {
+      type: "debugSetResources",
+      playerId: state.currentPlayerId,
+      resources: createResources({ wood: 1, metal: 1, ammo: 1, fuel: 1 })
+    });
+    room.gameState = state;
+    await store.saveRoom(room);
+
+    const transportEdgeId = legalBuildEdges(state, "transport")[0];
+    const afterTransport = await service.applyPlayerCommand({
+      roomCode: room.roomCode,
+      viewerPlayerId: state.currentPlayerId,
+      command: { type: "buildRoute", edgeId: transportEdgeId, routeType: "transport" }
+    });
+    expect(afterTransport.gameState?.players[0].resources).toMatchObject({
+      wood: 0,
+      metal: 0,
+      fuel: 1,
+      ammo: 1
+    });
+
+    state = applyCommand(afterTransport.gameState!, {
+      type: "debugSetResources",
+      playerId: afterTransport.gameState!.currentPlayerId,
+      resources: createResources({ wood: 1, metal: 1, ammo: 1, fuel: 1 })
+    });
+    await store.saveRoom({ ...afterTransport, gameState: state });
+
+    const convoyEdgeId = legalBuildEdges(state, "convoy")[0];
+    const afterConvoy = await service.applyPlayerCommand({
+      roomCode: room.roomCode,
+      viewerPlayerId: state.currentPlayerId,
+      command: { type: "buildRoute", edgeId: convoyEdgeId, routeType: "convoy" }
+    });
+    expect(afterConvoy.gameState?.players[0].resources).toMatchObject({
+      wood: 1,
+      metal: 1,
+      fuel: 0,
+      ammo: 0
+    });
+  });
+
   it("restores persisted sessions after a disconnect", async () => {
     const service = await createService();
     const created = await service.createRoom({
@@ -244,6 +334,18 @@ describe("OnlineRoomService", () => {
     expect(resumed?.seat.connected).toBe(true);
   });
 });
+
+function advanceToAction(initialState: GameState): GameState {
+  let state = initialState;
+  while (state.phase === "setup") {
+    state = applyCommand(state, { type: "placeInitialCamp", vertexId: legalInitialCampVertices(state)[0] });
+    state = applyCommand(state, { type: "placeInitialRoute", edgeId: legalInitialRouteEdges(state)[0] });
+    if (state.pending?.kind === "chooseResource") {
+      state = applyCommand(state, { type: "chooseResource", resources: { food: state.pending.amount } });
+    }
+  }
+  return applyCommand(state, { type: "rollDice", forced: [1, 1] });
+}
 
 class TransactionCountingFileStore extends FileRoomStore {
   transactionCount = 0;

@@ -8,6 +8,7 @@ import { diffGameStates } from "./ui/animation/diffGameStates";
 import { useGameAnimations } from "./ui/animation/useGameAnimations";
 import { gameAudio } from "./ui/audio/audioController";
 import { useAudioUnlock, useInteractiveAudioFeedback, useMusicMode } from "./ui/audio/useAudio";
+import { isCriticalGameArtPreloadComplete, preloadCriticalGameArtAssets } from "./ui/art/preloadGameAssets";
 import { GameShell } from "./ui/GameShell";
 import { StartScreen } from "./ui/StartScreen";
 import type { UiSelection, UiTool } from "./ui/gameUiTypes";
@@ -62,6 +63,9 @@ function App() {
   const [lastSeatPlayerId, setLastSeatPlayerId] = useState<string | undefined>();
   const ruleHintTimerRef = useRef<number>();
   const ruleHintIdRef = useRef(0);
+  const [criticalGameArtReady, setCriticalGameArtReady] = useState(isCriticalGameArtPreloadComplete);
+  const activeStateExists = Boolean(activeState);
+  const canShowGameBoard = !activeState || criticalGameArtReady || isCriticalGameArtPreloadComplete();
 
   const clearRuleHint = () => {
     if (ruleHintTimerRef.current) {
@@ -89,7 +93,7 @@ function App() {
   useAudioUnlock();
   useInteractiveAudioFeedback();
   useMusicMode(
-    !activeState
+    !activeState || !canShowGameBoard
       ? "menu"
       : activeState.phase === "victory"
         ? activeState.winnerId
@@ -105,6 +109,27 @@ function App() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!activeStateExists || isCriticalGameArtPreloadComplete()) {
+      setCriticalGameArtReady(isCriticalGameArtPreloadComplete());
+      return;
+    }
+
+    let cancelled = false;
+    setCriticalGameArtReady(false);
+    void preloadCriticalGameArtAssets().then((result) => {
+      if (cancelled) return;
+      setCriticalGameArtReady(true);
+      if (result.failed > 0) {
+        console.warn(`Game art preload completed with ${result.failed} failed asset(s).`);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeStateExists]);
 
   useEffect(() => {
     if (localState) {
@@ -298,7 +323,9 @@ function App() {
         setTool("none");
         setSelection(undefined);
       };
-  const importHandler = localState ? (state: GameState) => dispatch({ type: "import", state }) : () => undefined;
+  if (!canShowGameBoard) {
+    return <GameArtLoadingScreen />;
+  }
 
   return (
     <GameShell
@@ -311,6 +338,7 @@ function App() {
       interactionMode={localState ? "hot-seat" : "online"}
       onlineRoomCode={onlineSession.gameView?.roomMeta.roomCode}
       onlineConnectionState={onlineSession.connectionState}
+      onlineCommandBusy={!localState && onlineSession.busy}
       tool={tool}
       selection={selection}
       animationEvents={animationEvents}
@@ -323,7 +351,9 @@ function App() {
       }}
       onReportError={showRuleHint}
       onClear={clearHandler}
-      onImportState={importHandler}
+      onReconnectOnlineRoom={() => {
+        void onlineSession.resumeSavedSession();
+      }}
       onLeaveOnlineRoom={() => {
         clearRuleHint();
         onlineSession.leaveRoom();
@@ -334,6 +364,20 @@ function App() {
       setTool={setTool}
       setSelection={setSelection}
     />
+  );
+}
+
+function GameArtLoadingScreen() {
+  return (
+    <main className="game-viewport">
+      <div className="game-loading-shell" role="status" aria-live="polite">
+        <div className="game-loading-panel">
+          <span>正在装载战场资源</span>
+          <strong>请稍候</strong>
+          <i aria-hidden="true" />
+        </div>
+      </div>
+    </main>
   );
 }
 

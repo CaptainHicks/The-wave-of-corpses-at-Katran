@@ -45,8 +45,7 @@ export function useOnlineSession() {
     if (socketRef.current) return socketRef.current;
 
     const socket = io(resolveSocketUrl(), {
-      autoConnect: false,
-      transports: ["websocket"]
+      autoConnect: false
     });
 
     socket.on("room:view", (view: RoomView) => {
@@ -70,12 +69,13 @@ export function useOnlineSession() {
         void emitWithAck<OnlineEventAck>(socket, "room:resume", savedSession)
           .then((ack) => {
             if (!ack.ok) {
+              const failedAck = localizeFailedAck(ack);
               clearOnlineSession();
               setModel((current) => ({
                 ...current,
                 busy: false,
                 view: undefined,
-                error: ack.error
+                error: failedAck.error
               }));
             }
           })
@@ -104,7 +104,7 @@ export function useOnlineSession() {
         ...current,
         busy: false,
         connectionState: "disconnected",
-        error: error.message
+        error: localizeOnlineError(error.message)
       }));
     });
 
@@ -157,14 +157,15 @@ export function useOnlineSession() {
       const socket = await connectSocket();
       const ack = await emitWithAck<OnlineEventAck>(socket, eventName, payload);
       if (!ack.ok) {
-        options.onFailure?.(ack);
+        const failedAck = localizeFailedAck(ack);
+        options.onFailure?.(failedAck);
         setModel((current) => ({
           ...current,
           busy: false,
-          error: ack.error,
+          error: failedAck.error,
           view: options.clearViewOnFailure ? undefined : current.view
         }));
-        return ack;
+        return failedAck;
       }
       options.onSuccess?.(ack);
       setModel((current) => ({ ...current, busy: false, error: undefined }));
@@ -289,8 +290,9 @@ export function useOnlineSession() {
 }
 
 function resolveSocketUrl() {
-  if (typeof window !== "undefined" && import.meta.env.VITE_SOCKET_URL) {
-    return import.meta.env.VITE_SOCKET_URL;
+  const configuredSocketUrl = import.meta.env.VITE_SOCKET_URL?.trim();
+  if (typeof window !== "undefined" && configuredSocketUrl && !configuredSocketUrl.includes("{{")) {
+    return configuredSocketUrl;
   }
   if (typeof window !== "undefined") {
     return window.location.origin;
@@ -318,6 +320,51 @@ async function emitWithAck<TAck>(
 function toFailedAck(error: unknown): OnlineEventFailureAck {
   return {
     ok: false,
-    error: error instanceof Error ? error.message : "Online request failed."
+    error: localizeOnlineError(error instanceof Error ? error.message : "Online request failed.")
   };
+}
+
+function localizeFailedAck(ack: OnlineEventFailureAck): OnlineEventFailureAck {
+  return { ...ack, error: localizeOnlineError(ack.error) };
+}
+
+export function localizeOnlineError(message: string): string {
+  const normalized = message.trim();
+  const exactMessages: Record<string, string> = {
+    "This room is no longer accepting players.": "这个房间已经不能加入了。",
+    "This room is already full.": "这个房间已经满员了。",
+    "Factions can only be changed while the room is in the lobby.": "只有在房间大厅里才能更换阵营。",
+    "Player seat not found in this room.": "没有在这个房间里找到你的玩家席位。",
+    "Unknown faction.": "未知阵营。",
+    "That faction has already been chosen by another player.": "这个阵营已经被其他玩家选择了。",
+    "This room has already started.": "这个房间已经开始游戏了。",
+    "Only the host can start the room.": "只有房主可以开始游戏。",
+    "The room must be full before the host can start the game.": "房间满员后，房主才能开始游戏。",
+    "Every player must choose a faction before the host can start the game.": "所有玩家都选择阵营后，房主才能开始游戏。",
+    "This room is not in an active game.": "这个房间当前不在游戏中。",
+    "Failed to allocate a unique room code.": "房间码生成失败，请稍后重试。",
+    "Player name is required.": "请输入玩家名称。",
+    "Room not found.": "没有找到这个房间。",
+    "Online rooms support 2 to 6 players.": "在线房间支持 2 到 6 名玩家。",
+    "This player cannot issue that command in online mode.": "这名玩家不能在联机模式中执行这个操作。",
+    "Debug and local-only commands are disabled in online mode.": "调试和本地专用操作不能在联机模式中使用。",
+    "Forced dice rolls are disabled in online mode.": "联机模式不能指定骰子点数。",
+    "Viewer is not part of this room.": "你不在这个房间中。",
+    "Only the active online player may submit this command.": "只有当前行动玩家可以执行这个操作。",
+    "Timeout command no longer matches the active player.": "超时操作已经和当前行动玩家不一致。",
+    "Saved session not found.": "没有找到可恢复的联机房间。",
+    "Join or resume the room before starting it.": "请先加入或恢复房间，再开始游戏。",
+    "Join or resume the room before choosing a faction.": "请先加入或恢复房间，再选择阵营。",
+    "Join or resume the room before sending commands.": "请先加入或恢复房间，再进行操作。",
+    "Join or resume the room before leaving it.": "请先加入或恢复房间，再离开房间。",
+    "Online request failed.": "联机请求失败，请稍后重试。",
+    "Unknown online server error.": "联机服务器发生未知错误。"
+  };
+  if (exactMessages[normalized]) return exactMessages[normalized];
+  const timeoutMatch = /^Timed out waiting for (.+) acknowledgement\.$/.exec(normalized);
+  if (timeoutMatch) return `联机请求超时，请检查网络后重试。`;
+  if (/websocket|xhr poll|transport|socket/i.test(normalized)) {
+    return "联机连接失败，请检查网络或稍后重试。";
+  }
+  return normalized || "联机请求失败，请稍后重试。";
 }

@@ -10,6 +10,7 @@ export function MainTurnButton({
   state,
   mode,
   animationBusy,
+  commandBusy = false,
   interactionLocked = false,
   lockedSubtitle = "其他玩家正在行动",
   submit
@@ -17,6 +18,7 @@ export function MainTurnButton({
   state: GameState;
   mode: TurnUiMode;
   animationBusy: boolean;
+  commandBusy?: boolean;
   interactionLocked?: boolean;
   lockedSubtitle?: string;
   submit: (command: Command) => void;
@@ -28,6 +30,18 @@ export function MainTurnButton({
           iconUrl={TURN_BUTTON_ART.hourglass}
           title="等待其他玩家"
           subtitle={lockedSubtitle}
+        />
+      </button>
+    );
+  }
+
+  if (commandBusy) {
+    return (
+      <button className="main-turn-button illustrated-turn-button illustrated-turn-button-muted" disabled aria-busy="true">
+        <TurnButtonContent
+          iconUrl={TURN_BUTTON_ART.hourglass}
+          title="同步中"
+          subtitle="正在提交联机操作"
         />
       </button>
     );

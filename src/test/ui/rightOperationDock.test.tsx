@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createResources } from "../../domain/constants";
 import {
@@ -8,13 +8,22 @@ import {
   legalInitialRouteEdges
 } from "../../domain/rules";
 import type { GameState } from "../../domain/types";
+import { materializeOnlineGameState } from "../../online/clientState";
+import { buildOnlineGameView } from "../../online/protocol";
 import { RightOperationDock } from "../../ui/Panels/RightOperationDock";
+
+const AUDIO_SETTINGS_KEY = "zombie-catan-audio-settings";
 
 function minimalRollState() {
   return {
     phase: "dice",
     currentPlayerId: "p1",
-    players: [{ id: "p1", name: "A", color: "#d84f3f" }]
+    fogEnabled: true,
+    debugMode: false,
+    players: [
+      { id: "p1", name: "A", color: "#d84f3f" },
+      { id: "p2", name: "B", color: "#2b78d4" }
+    ]
   } as unknown as GameState;
 }
 
@@ -46,6 +55,7 @@ function setupActionState(): GameState {
 describe("RightOperationDock", () => {
   afterEach(() => {
     cleanup();
+    window.localStorage.clear();
   });
 
   it("places compact utility buttons before the main turn action", () => {
@@ -61,7 +71,6 @@ describe("RightOperationDock", () => {
         setTool={vi.fn()}
         setSelection={vi.fn()}
         onClear={vi.fn()}
-        onImportState={vi.fn()}
       />
     );
 
@@ -72,6 +81,28 @@ describe("RightOperationDock", () => {
     expect(screen.getByRole("button", { name: "建造成本" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "菜单" })).toBeInTheDocument();
     expect(utilityRow!.compareDocumentPosition(mainButton!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it("shows the per-player operation timer", () => {
+    render(
+      <RightOperationDock
+        state={minimalRollState()}
+        mode="mustRoll"
+        tool="none"
+        viewerPlayerId="p1"
+        interactionMode="hot-seat"
+        turnTimeRemaining={60}
+        turnTimeLimit={60}
+        animationBusy={false}
+        submit={vi.fn()}
+        setTool={vi.fn()}
+        setSelection={vi.fn()}
+        onClear={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("region", { name: "操作倒计时" })).toHaveTextContent("1:00");
+    expect(screen.getByText("A 超时后系统自动托管。")).toBeInTheDocument();
   });
 
   it("opens system menu actions in a modal", () => {
@@ -89,7 +120,6 @@ describe("RightOperationDock", () => {
         setTool={setTool}
         setSelection={vi.fn()}
         onClear={onClear}
-        onImportState={vi.fn()}
       />
     );
 
@@ -97,15 +127,120 @@ describe("RightOperationDock", () => {
     expect(screen.getByRole("dialog", { name: "系统菜单" })).toBeInTheDocument();
     expect(screen.getByLabelText("游戏背景音乐音量")).toBeInTheDocument();
     expect(screen.getByLabelText("游戏音效音量")).toBeInTheDocument();
+    expect(screen.queryByText("复制JSON")).not.toBeInTheDocument();
+    expect(screen.queryByText("导出")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("导入存档JSON")).not.toBeInTheDocument();
+    expect(screen.getByText("当前模式")).toBeInTheDocument();
+    expect(screen.getByText("12分")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "退出本局到主页面" }));
+    fireEvent.click(screen.getByRole("button", { name: /退出到主菜单/ }));
 
     expect(onClear).toHaveBeenCalledOnce();
     expect(setTool).toHaveBeenCalledWith("none");
   });
 
+  it("toggles the system menu mute button between mute and restore", () => {
+    render(
+      <RightOperationDock
+        state={minimalRollState()}
+        mode="mustRoll"
+        tool="none"
+        viewerPlayerId="p1"
+        interactionMode="hot-seat"
+        animationBusy={false}
+        submit={vi.fn()}
+        setTool={vi.fn()}
+        setSelection={vi.fn()}
+        onClear={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "菜单" }));
+    const musicSlider = screen.getByLabelText("游戏背景音乐音量") as HTMLInputElement;
+    const sfxSlider = screen.getByLabelText("游戏音效音量") as HTMLInputElement;
+
+    expect(musicSlider.value).toBe("70");
+    expect(sfxSlider.value).toBe("80");
+
+    fireEvent.click(screen.getByRole("button", { name: /一键静音/ }));
+
+    expect(screen.getByRole("button", { name: /一键恢复音量/ })).toBeInTheDocument();
+    expect(musicSlider.value).toBe("70");
+    expect(sfxSlider.value).toBe("80");
+
+    fireEvent.click(screen.getByRole("button", { name: /一键恢复音量/ }));
+
+    expect(screen.getByRole("button", { name: /一键静音/ })).toBeInTheDocument();
+    expect(musicSlider.value).toBe("70");
+    expect(sfxSlider.value).toBe("80");
+  });
+
+  it("restores the player's previous custom volume from system menu mute", () => {
+    window.localStorage.setItem(
+      AUDIO_SETTINGS_KEY,
+      JSON.stringify({ musicVolume: 35, sfxVolume: 45, muted: false, lastMusicVolume: 35, lastSfxVolume: 45 })
+    );
+
+    render(
+      <RightOperationDock
+        state={minimalRollState()}
+        mode="mustRoll"
+        tool="none"
+        viewerPlayerId="p1"
+        interactionMode="hot-seat"
+        animationBusy={false}
+        submit={vi.fn()}
+        setTool={vi.fn()}
+        setSelection={vi.fn()}
+        onClear={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "菜单" }));
+    const musicSlider = screen.getByLabelText("游戏背景音乐音量") as HTMLInputElement;
+    const sfxSlider = screen.getByLabelText("游戏音效音量") as HTMLInputElement;
+
+    expect(musicSlider.value).toBe("35");
+    expect(sfxSlider.value).toBe("45");
+
+    fireEvent.click(screen.getByRole("button", { name: /一键静音/ }));
+    fireEvent.click(screen.getByRole("button", { name: /一键恢复音量/ }));
+
+    expect(musicSlider.value).toBe("35");
+    expect(sfxSlider.value).toBe("45");
+  });
+
+  it("shows the updated in-game rules copy in the system menu", () => {
+    render(
+      <RightOperationDock
+        state={minimalRollState()}
+        mode="mustRoll"
+        tool="none"
+        viewerPlayerId="p1"
+        interactionMode="hot-seat"
+        animationBusy={false}
+        submit={vi.fn()}
+        setTool={vi.fn()}
+        setSelection={vi.fn()}
+        onClear={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "菜单" }));
+    fireEvent.click(screen.getByRole("button", { name: /查看规则说明/ }));
+
+    expect(screen.getByRole("dialog", { name: "规则说明" })).toBeInTheDocument();
+    expect(screen.getByText("率先在自己的回合达到 12 点胜利点即可获胜。")).toBeInTheDocument();
+    expect(screen.getByText("掷骰产资源 → 处理尸潮 → 交易 → 建造 → 民兵 / 发展卡 → 检查胜利。")).toBeInTheDocument();
+    expect(screen.getByText("骰子点数等于地块数字时，相邻建筑获得资源。营地获得 1 张，堡垒获得 2 张。尸潮所在地块不产资源。")).toBeInTheDocument();
+    expect(screen.getByText("每名玩家首次在非起始资源区的新资源区建立营地时，额外获得 1 点胜利点；同一玩家在每个新资源区最多获得一次该奖励。")).toBeInTheDocument();
+    expect(screen.getByText("民兵需要先征召，再支付食物激活。只有已激活民兵可以防御、驱逐尸潮或移动。")).toBeInTheDocument();
+    expect(screen.getByText("每回合最多使用 1 张发展卡，本回合购买的发展卡不能立刻使用。秘密据点在达到胜利条件时公开计分。")).toBeInTheDocument();
+  });
+
   it("shows readable online room copy in the system menu during online play", () => {
     const onLeaveOnlineRoom = vi.fn();
+    const onReconnectOnlineRoom = vi.fn();
     render(
       <RightOperationDock
         state={minimalRollState()}
@@ -120,23 +255,62 @@ describe("RightOperationDock", () => {
         setTool={vi.fn()}
         setSelection={vi.fn()}
         onClear={vi.fn()}
-        onImportState={vi.fn()}
+        onReconnectOnlineRoom={onReconnectOnlineRoom}
         onLeaveOnlineRoom={onLeaveOnlineRoom}
       />
     );
 
     fireEvent.click(screen.getByRole("button", { name: "菜单" }));
 
-    expect(screen.getByRole("heading", { name: "在线联机" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "暂停菜单" })).toBeInTheDocument();
+    expect(screen.getByText("当前正在进行在线对局")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /回到战局/ })).toBeInTheDocument();
     expect(screen.getByText("房间状态")).toBeInTheDocument();
     expect(screen.getByText("已连接")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "复制房间码 ROOM42" })).toBeInTheDocument();
+    expect(screen.getByLabelText("游戏背景音乐音量")).toBeInTheDocument();
+    expect(screen.getByLabelText("游戏音效音量")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "离开在线房间" }));
+    fireEvent.click(screen.getByRole("button", { name: /离开在线房间/ }));
     expect(onLeaveOnlineRoom).toHaveBeenCalledOnce();
+    expect(onReconnectOnlineRoom).not.toHaveBeenCalled();
   });
 
-  it("only shows cheat controls for games created with debug mode", () => {
+  it("offers reconnect and mute controls in the online pause menu", () => {
+    const onReconnectOnlineRoom = vi.fn();
+    render(
+      <RightOperationDock
+        state={minimalRollState()}
+        mode="mustRoll"
+        tool="none"
+        viewerPlayerId="p1"
+        interactionMode="online"
+        onlineRoomCode="ROOM42"
+        onlineConnectionState="reconnecting"
+        animationBusy={false}
+        submit={vi.fn()}
+        setTool={vi.fn()}
+        setSelection={vi.fn()}
+        onClear={vi.fn()}
+        onReconnectOnlineRoom={onReconnectOnlineRoom}
+        onLeaveOnlineRoom={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "菜单" }));
+    fireEvent.click(screen.getByRole("button", { name: "重连中" }));
+    expect(onReconnectOnlineRoom).toHaveBeenCalledOnce();
+
+    const musicSlider = screen.getByLabelText("游戏背景音乐音量") as HTMLInputElement;
+    const sfxSlider = screen.getByLabelText("游戏音效音量") as HTMLInputElement;
+    expect(musicSlider.value).toBe("70");
+    expect(sfxSlider.value).toBe("80");
+
+    fireEvent.click(screen.getByRole("button", { name: /一键静音/ }));
+    expect(screen.getByRole("button", { name: /一键恢复音量/ })).toBeInTheDocument();
+  });
+
+  it("only enables cheat controls for games created with debug mode", () => {
     const { container } = render(
       <RightOperationDock
         state={{ ...minimalRollState(), debugMode: false }}
@@ -149,12 +323,13 @@ describe("RightOperationDock", () => {
         setTool={vi.fn()}
         setSelection={vi.fn()}
         onClear={vi.fn()}
-        onImportState={vi.fn()}
       />
     );
 
     fireEvent.click(container.querySelector<HTMLButtonElement>(".dock-menu-button")!);
-    expect(document.body.querySelector(".debug-row")).not.toBeInTheDocument();
+    expect(document.body.querySelector(".debug-row")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /补给当前玩家/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /推进尸潮进度/ })).toBeDisabled();
     expect(container.querySelector(".debug-drawer")).not.toBeInTheDocument();
 
     cleanup();
@@ -170,12 +345,13 @@ describe("RightOperationDock", () => {
         setTool={vi.fn()}
         setSelection={vi.fn()}
         onClear={vi.fn()}
-        onImportState={vi.fn()}
       />
     );
 
     fireEvent.click(debugRender.container.querySelector<HTMLButtonElement>(".dock-menu-button")!);
     expect(document.body.querySelector(".debug-row")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /补给当前玩家/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /推进尸潮进度/ })).toBeEnabled();
     expect(debugRender.container.querySelector(".debug-drawer")).toBeInTheDocument();
   });
 
@@ -200,7 +376,6 @@ describe("RightOperationDock", () => {
         setTool={setTool}
         setSelection={setSelection}
         onClear={vi.fn()}
-        onImportState={vi.fn()}
       />
     );
     const selects = () => container.querySelectorAll<HTMLSelectElement>(".trade-row select");
@@ -220,7 +395,6 @@ describe("RightOperationDock", () => {
         setTool={setTool}
         setSelection={setSelection}
         onClear={vi.fn()}
-        onImportState={vi.fn()}
       />
     );
 
@@ -243,7 +417,6 @@ describe("RightOperationDock", () => {
         setTool={vi.fn()}
         setSelection={vi.fn()}
         onClear={vi.fn()}
-        onImportState={vi.fn()}
       />
     );
 
@@ -257,6 +430,72 @@ describe("RightOperationDock", () => {
     expect(bankTradeButton).toBeDisabled();
     expect([...offerCounts].every((item) => item.textContent === "0")).toBe(true);
     expect(offerButton).toBeDisabled();
+  });
+
+  it("enables buying development cards from an online materialized state", () => {
+    const state = setupActionState();
+    const submit = vi.fn();
+    const view = buildOnlineGameView(
+      {
+        roomCode: "ROOM55",
+        hostPlayerId: "p1",
+        status: "active",
+        connectedPlayerIds: ["p1", "p2", "p3"]
+      },
+      state,
+      state.currentPlayerId
+    );
+    const onlineState = materializeOnlineGameState(view);
+
+    render(
+      <RightOperationDock
+        state={onlineState}
+        mode="freeAction"
+        tool="none"
+        viewerPlayerId={state.currentPlayerId}
+        interactionMode="online"
+        animationBusy={false}
+        submit={submit}
+        setTool={vi.fn()}
+        setSelection={vi.fn()}
+        onClear={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: /发展/ }));
+    const buyButton = screen.getByRole("button", { name: /购买发展卡/ });
+    expect(buyButton).toBeEnabled();
+
+    fireEvent.click(buyButton);
+    expect(submit).toHaveBeenCalledWith({ type: "buyDevelopmentCard" });
+  });
+
+  it("uses recruit and activate wording in the militia panel", () => {
+    const state = setupActionState();
+    render(
+      <RightOperationDock
+        state={state}
+        mode="freeAction"
+        tool="none"
+        viewerPlayerId={state.currentPlayerId}
+        interactionMode="hot-seat"
+        animationBusy={false}
+        submit={vi.fn()}
+        setTool={vi.fn()}
+        setSelection={vi.fn()}
+        onClear={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: /民兵/ }));
+
+    expect(screen.getByRole("heading", { name: "征召与激活" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /征召民兵/ })).toBeInTheDocument();
+    expect(screen.getByText("点击己方营地或堡垒征召民兵，每处最多驻守 2 个。")).toBeInTheDocument();
+    expect(screen.getByText("点击已征召民兵的营地或堡垒激活民兵，激活的民兵下回合才能使用。")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "已部署民兵" })).not.toBeInTheDocument();
+    expect(screen.queryByText("当前没有可指挥的民兵。")).not.toBeInTheDocument();
+    expect(screen.queryByText(/部署/)).not.toBeInTheDocument();
   });
 
   it("clears stale board tools when a right-side action mutates the game", async () => {
@@ -281,7 +520,6 @@ describe("RightOperationDock", () => {
         setTool={setTool}
         setSelection={setSelection}
         onClear={vi.fn()}
-        onImportState={vi.fn()}
       />
     );
 
@@ -297,7 +535,6 @@ describe("RightOperationDock", () => {
         setTool={setTool}
         setSelection={setSelection}
         onClear={vi.fn()}
-        onImportState={vi.fn()}
       />
     );
 
@@ -319,7 +556,6 @@ describe("RightOperationDock", () => {
         setTool={vi.fn()}
         setSelection={vi.fn()}
         onClear={vi.fn()}
-        onImportState={vi.fn()}
       />
     );
 
@@ -333,6 +569,45 @@ describe("RightOperationDock", () => {
     expect(container.querySelector('.dock-tool-grid img[src="/assets/hud/transport.v1.webp"]')).toBeInTheDocument();
     expect(container.querySelector('.dock-tool-grid img[src="/assets/hud/convoy.v1.webp"]')).toBeInTheDocument();
     expect(container.querySelector('.dock-tool-grid img[src="/assets/hud/watchtower.v1.webp"]')).toBeInTheDocument();
+    const convoyToolRow = container.querySelector(".convoy-tool-row");
+    expect(convoyToolRow).toBeInTheDocument();
+    expect(within(convoyToolRow as HTMLElement).getByRole("button", { name: /装甲车队/ })).toBeInTheDocument();
+    expect(within(convoyToolRow as HTMLElement).getByRole("button", { name: /移动车队/ })).toBeInTheDocument();
     expect(legalBuildEdges(state, "transport").length).toBeGreaterThan(0);
+  });
+
+  it("clears move convoy selection when another build tool is chosen", () => {
+    let state = setupActionState();
+    state = applyCommand(state, {
+      type: "buildRoute",
+      edgeId: legalBuildEdges(state, "convoy")[0],
+      routeType: "convoy",
+      free: true
+    });
+    const setTool = vi.fn();
+    const setSelection = vi.fn();
+    render(
+      <RightOperationDock
+        state={state}
+        mode="freeAction"
+        tool="none"
+        viewerPlayerId={state.currentPlayerId}
+        interactionMode="hot-seat"
+        animationBusy={false}
+        submit={vi.fn()}
+        setTool={setTool}
+        setSelection={setSelection}
+        onClear={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: /建造/ }));
+    fireEvent.click(screen.getByRole("button", { name: /移动车队/ }));
+    expect(setSelection).toHaveBeenLastCalledWith({ kind: "moveConvoy" });
+
+    fireEvent.click(screen.getByRole("button", { name: /运输线/ }));
+
+    expect(setSelection).toHaveBeenLastCalledWith(undefined);
+    expect(setTool).toHaveBeenLastCalledWith("transport");
   });
 });

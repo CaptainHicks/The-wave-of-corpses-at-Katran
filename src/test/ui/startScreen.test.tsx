@@ -145,6 +145,15 @@ describe("StartScreen", () => {
     expect(screen.getByRole("heading", { name: "游戏概述" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "回合流程" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "尸潮与民兵" })).toBeInTheDocument();
+    expect(screen.getByText("率先达到 12 点")).toBeInTheDocument();
+    expect(screen.getByLabelText("每名玩家棋子上限")).toBeInTheDocument();
+    expect(screen.getByText("营地：5 个")).toBeInTheDocument();
+    expect(screen.getByText("堡垒：4 个")).toBeInTheDocument();
+    expect(screen.getByText("运输线：15 条")).toBeInTheDocument();
+    expect(screen.getByText("装甲车队：10 个")).toBeInTheDocument();
+    expect(screen.getByText("哨塔：4 个")).toBeInTheDocument();
+    expect(screen.getByText("民兵：12 个")).toBeInTheDocument();
+    expect(screen.queryByText(/14 点/)).not.toBeInTheDocument();
     expect(container.querySelector(".start-rules-scroll")).toBeInTheDocument();
     expect(screen.queryByText(/1\s*\/\s*10/)).not.toBeInTheDocument();
   });
