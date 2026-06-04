@@ -21,13 +21,14 @@ import { PrivacyGate } from "./Modals/PrivacyGate";
 import { VictorySettlementModal } from "./Modals/VictorySettlementModal";
 import { LeftInfoRail } from "./Panels/LeftInfoRail";
 import { RightOperationDock } from "./Panels/RightOperationDock";
-import { type InteractionMode, type UiSelection, type UiTool } from "./gameUiTypes";
+import { type InteractionMode, type UiOperationContext, type UiSelection, type UiTool } from "./gameUiTypes";
 import { getTurnUiMode } from "./selectors/turnUiMode";
 
 interface GameShellProps {
   state: GameState;
   error?: string;
   ruleHint?: string;
+  operationHint?: string;
   privacy: boolean;
   seatPlayerName: string;
   viewerPlayerId: string;
@@ -49,6 +50,7 @@ interface GameShellProps {
   submit: (command: Command) => void;
   setTool: (tool: UiTool) => void;
   setSelection: Dispatch<SetStateAction<UiSelection | undefined>>;
+  setOperationContext?: Dispatch<SetStateAction<UiOperationContext | undefined>>;
 }
 
 const DEFAULT_MAP_SCALE = 0.7;
@@ -60,6 +62,7 @@ const MAP_DRAG_START_THRESHOLD_PX = 8;
 const GAME_STAGE_WIDTH = 1672;
 const GAME_STAGE_HEIGHT = 941;
 const TURN_TIME_LIMIT_SECONDS = 60;
+const OPERATION_HINT_VISIBLE_MS = 4200;
 
 interface MapViewState {
   scale: number;
@@ -107,6 +110,7 @@ export function GameShell({
   state,
   error,
   ruleHint,
+  operationHint,
   privacy,
   seatPlayerName,
   viewerPlayerId,
@@ -127,7 +131,8 @@ export function GameShell({
   onLeaveOnlineRoom,
   submit,
   setTool,
-  setSelection
+  setSelection,
+  setOperationContext
 }: GameShellProps) {
   const mode = getTurnUiMode(state);
   const effectivePendingPlayerId = pendingPlayerId ?? state.pending?.playerId;
@@ -140,6 +145,8 @@ export function GameShell({
     turnTimerScope
   ].join(":");
   const [turnTimeRemaining, setTurnTimeRemaining] = useState(TURN_TIME_LIMIT_SECONDS);
+  const [visibleOperationHintText, setVisibleOperationHintText] = useState<string>();
+  const visibleOperationHint = canInteract && !ruleHint ? visibleOperationHintText : undefined;
   const submittedTimeoutKeyRef = useRef<string>();
   const submitRef = useRef(submit);
   const [stageScale, setStageScale] = useState(getStageScale);
@@ -365,6 +372,16 @@ export function GameShell({
   }, [submit]);
 
   useEffect(() => {
+    if (!operationHint) {
+      setVisibleOperationHintText(undefined);
+      return;
+    }
+    setVisibleOperationHintText(operationHint);
+    const timerId = window.setTimeout(() => setVisibleOperationHintText(undefined), OPERATION_HINT_VISIBLE_MS);
+    return () => window.clearTimeout(timerId);
+  }, [operationHint]);
+
+  useEffect(() => {
     const handleResize = () => {
       const nextScale = getStageScale();
       setStageScale(nextScale);
@@ -403,6 +420,14 @@ export function GameShell({
     return () => window.clearInterval(timerId);
   }, [activeTimerPlayerId, canInteract, mode, state.turn, turnTimerKey]);
 
+  const mapLayerClassName = [
+    "map-layer",
+    isPanning ? "is-panning" : undefined,
+    selection ? `selection-${selection.kind}` : undefined
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <main className="game-viewport">
       <div className="app-shell game-shell" style={gameStageStyle}>
@@ -417,17 +442,22 @@ export function GameShell({
           />
         )}
 
-        {(ruleHint || error) && (
+        {(visibleOperationHint || ruleHint || error) && (
           <div className="shell-toast-stack">
+            {visibleOperationHint && (
+              <div className="error-banner shell-rule-hint shell-operation-hint" role="status" aria-live="polite">
+                <span>{formatToastMessage(visibleOperationHint)}</span>
+              </div>
+            )}
             {ruleHint && (
               <div className="error-banner shell-rule-hint" role="status" aria-live="polite">
-                <span>{ruleHint}</span>
+                <span>{formatToastMessage(ruleHint)}</span>
               </div>
             )}
             {error && (
               <div className="error-banner shell-error">
                 <AlertTriangle size={18} />
-                <span>{error}</span>
+                <span>{formatToastMessage(error)}</span>
                 <button onClick={onDismissError}>{"\u5173\u95ed"}</button>
               </div>
             )}
@@ -436,7 +466,7 @@ export function GameShell({
 
         <section
           ref={mapLayerRef}
-          className={isPanning ? "map-layer is-panning" : "map-layer"}
+          className={mapLayerClassName}
           aria-label="Map layer"
           onWheel={handleMapWheel}
           onPointerDown={handleMapPointerDown}
@@ -486,6 +516,7 @@ export function GameShell({
           submit={submit}
           setTool={setTool}
           setSelection={setSelection}
+          setOperationContext={setOperationContext}
           onClear={onClear}
           onReconnectOnlineRoom={onReconnectOnlineRoom}
           onLeaveOnlineRoom={onLeaveOnlineRoom}
@@ -498,10 +529,15 @@ export function GameShell({
           submit={submit}
           setTool={setTool}
           setSelection={setSelection}
+          setOperationContext={setOperationContext}
         />
 
         {state.phase === "victory" && <VictorySettlementModal state={state} onReturnHome={onClear} />}
       </div>
     </main>
   );
+}
+
+function formatToastMessage(message: string) {
+  return message.trim().replace(/[。.]$/, "");
 }

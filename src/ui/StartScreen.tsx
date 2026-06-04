@@ -378,7 +378,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
           <Globe2 size={46} />
           <strong>在线游玩</strong>
           <small>
-            连接网络，与全球玩家
+            连接网络，与远方玩家
             <br />
             一起拓荒废土
           </small>
@@ -386,7 +386,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
       </div>
       <p className="start-mode-hint">
         <span aria-hidden="true">!</span>
-        您可以在游戏内随时切换游戏方式
+        你可以在主菜单选择本地热座或在线游玩
       </p>
       </div>
     </div>
@@ -424,7 +424,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
                 onClick={() => setCount(value)}
               >
                 <Users size={26} />
-                <span>{value}人</span>
+                <span>{value} 人</span>
               </button>
             ))}
           </div>
@@ -585,7 +585,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
                 <div>
                   <Users size={24} />
                   <dt>支持人数</dt>
-                  <dd>2-6 人</dd>
+                  <dd>2 到 6 人</dd>
                 </div>
                 <div>
                   <Dices size={24} />
@@ -619,7 +619,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
                 <ul>
                   <li>营地：每个 1 点，堡垒：每个 2 点。</li>
                   <li>最长补给线和最强民兵各价值 2 点。</li>
-                  <li>首次在非起始资源区的新资源区建立营地时，额外获得 1 点；每名玩家每个新资源区最多获得一次。</li>
+                  <li>首次在非起始的新资源区建立营地时，额外获得 1 点；每名玩家每个新资源区最多获得一次。</li>
                   <li>秘密据点、商人控制权、卡坦保卫者都能提供额外胜利点。</li>
                 </ul>
               </div>
@@ -642,7 +642,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
               <p>轮到你时，按固定流程行动。多数操作都发生在交易、建造、民兵和发展卡阶段。</p>
             </div>
             <ol className="start-rules-timeline">
-              <li><strong>准备阶段</strong><span>上回合进入准备中的民兵，从本回合开始变为可用的已激活民兵。</span></li>
+              <li><strong>准备阶段</strong><span>重置本回合状态，确认民兵防线、发展卡和车队行动。</span></li>
               <li><strong>掷骰阶段</strong><span>掷两颗六面骰。非 7 点时，对应数字地块为相邻建筑产出资源。</span></li>
               <li><strong>尸潮阶段</strong><span>如果掷出 7，检查弃牌、移动尸潮、抽取资源，并推进尸潮进度。</span></li>
               <li><strong>交易阶段</strong><span>可以与其他玩家交易，也可以按银行、黑市或商人的比例换资源。</span></li>
@@ -722,7 +722,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
                 </ul>
               </div>
             </div>
-            <p className="start-rules-note">民兵必须驻守在自己的营地或堡垒上，每个建筑最多 2 个。刚激活的民兵要到下个自己的回合才可使用。</p>
+            <p className="start-rules-note">民兵必须驻守在自己的营地或堡垒上，每个建筑最多 2 个。刚激活的民兵本回合不能主动行动，但会参与尸潮围城防御。</p>
           </article>
 
           <article id="rules-fog" className="start-rules-section">
@@ -889,7 +889,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
     <div className="start-flow-steps" aria-label="在线联机流程">
       {[
         { id: "select", label: "选择信标" },
-        { id: current === "join" ? "join" : "create", label: current === "join" ? "查房间" : "建房间" },
+        { id: current === "join" ? "join" : "create", label: current === "join" ? "查找房间" : "创建房间" },
         { id: "lobby", label: "大厅整备" }
       ].map((step, index) => (
         <span key={`${step.id}-${index}`} className={step.id === current ? "active" : ""}>
@@ -909,7 +909,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
             <span aria-hidden="true" />
             <div>
               <h2>在线游玩</h2>
-              <p>与全球玩家一起，在废土世界中求生拓荒</p>
+              <p>与远方玩家一起，在废土世界中求生拓荒</p>
             </div>
             <span aria-hidden="true" />
           </header>
@@ -933,7 +933,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
                     value={onlineHostName}
                     onChange={(event) => setOnlineHostName(event.target.value)}
                     maxLength={16}
-                    placeholder="请输入房主昵称（2-16个字符）"
+                    placeholder="请输入房主昵称（2 到 16 个字符）"
                   />
                   <Dices size={20} aria-hidden="true" />
                 </div>
@@ -952,7 +952,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
                       onClick={() => setOnlineTargetCount(value)}
                     >
                       <User size={17} />
-                      <span>{value}人</span>
+                      <span>{value} 人</span>
                     </button>
                   ))}
                 </div>
@@ -1015,7 +1015,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
                     value={onlineJoinName}
                     onChange={(event) => setOnlineJoinName(event.target.value)}
                     maxLength={16}
-                    placeholder="请输入您的昵称（2-16个字符）"
+                    placeholder="请输入你的昵称（2 到 16 个字符）"
                   />
                   <Dices size={20} aria-hidden="true" />
                 </div>
@@ -1023,7 +1023,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
 
               <div className="start-online-field">
                 <span>2. 输入房间码</span>
-                <small>请输入6位房间码</small>
+                <small>请输入 6 位房间码</small>
                 <input
                   className="sr-only"
                   aria-label="在线房间码"
@@ -1037,7 +1037,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
                       ref={(node) => {
                         joinRoomCodeInputRefs.current[index] = node;
                       }}
-                      aria-label={`房间码第${index + 1}位`}
+                      aria-label={`房间码第 ${index + 1} 位`}
                       value={normalizedJoinRoomCode[index] ?? ""}
                       maxLength={1}
                       onFocus={() => handleJoinRoomCodeFocus(index)}
@@ -1059,7 +1059,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
                 <Search size={22} />
                 <div>
                   <strong>如何获取房间码？</strong>
-                  <span>请向房主或其他玩家索要6位房间码</span>
+                  <span>请向房主或其他玩家索要 6 位房间码</span>
                 </div>
               </div>
 
@@ -1277,7 +1277,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
                   <User size={19} />
                   房间名称
                 </dt>
-                <dd>一起拓荒吧!</dd>
+                <dd>一起拓荒吧！</dd>
               </div>
               <div>
                 <dt>
@@ -1385,7 +1385,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
               ))}
             </div>
             <div className="start-lobby-chat-input">
-              <input aria-label="房间聊天内容" placeholder="点击输入聊天内容..." />
+              <input aria-label="房间聊天内容" placeholder="点击输入聊天内容…" />
               <Smile size={20} aria-hidden="true" />
               <button type="button">发送</button>
             </div>
@@ -1503,7 +1503,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
         >
           {renderActivePanel()}
         </section>
-        {view === "main" && !online?.lobbyView ? <p className="start-version">版本号： 1.0.0</p> : null}
+        {view === "main" && !online?.lobbyView ? <p className="start-version">版本号：1.0.0</p> : null}
       </div>
     </main>
   );

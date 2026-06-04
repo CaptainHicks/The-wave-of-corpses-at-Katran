@@ -3553,13 +3553,13 @@ textarea {
 
 .shell-toast-stack {
   position: absolute;
-  z-index: var(--z-modal);
+  z-index: calc(var(--z-dock) + 5);
   left: 50%;
-  top: 12px;
-  width: 720px;
+  top: calc(var(--ui-gutter) + var(--ui-top-height) + 8px);
+  width: min(620px, calc(100% - 36px));
   transform: translateX(-50%);
   display: grid;
-  gap: 10px;
+  gap: 6px;
   pointer-events: none;
 }
 
@@ -3571,9 +3571,15 @@ textarea {
 
 .shell-rule-hint {
   justify-content: center;
-  padding: 12px 18px;
-  color: #8c4d22;
-  background: rgba(247, 240, 223, 0.96);
+  min-height: 34px;
+  padding: 8px 16px;
+  color: rgba(244, 211, 194, 0.94);
+  border: 1px solid rgba(159, 74, 49, 0.42);
+  background:
+    linear-gradient(180deg, rgba(57, 38, 31, 0.82), rgba(24, 21, 18, 0.72)),
+    rgba(20, 18, 15, 0.7);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.26);
+  backdrop-filter: blur(5px);
   text-align: center;
   pointer-events: none;
 }
@@ -3582,6 +3588,15 @@ textarea {
   flex: 0 1 auto;
   text-align: center;
   line-height: 1.45;
+}
+
+.shell-operation-hint {
+  color: rgba(218, 235, 205, 0.94);
+  border-color: rgba(103, 143, 80, 0.44);
+  background:
+    linear-gradient(180deg, rgba(39, 54, 36, 0.82), rgba(19, 25, 18, 0.72)),
+    rgba(17, 22, 16, 0.68);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24);
 }
 
 .board-svg {
@@ -3760,6 +3775,12 @@ textarea {
 
 .edge-route-group {
   cursor: pointer;
+}
+
+.map-layer.selection-expelZombie .tile,
+.map-layer.selection-expelZombie .edge,
+.map-layer.selection-expelZombie .edge-route-group {
+  cursor: default;
 }
 
 .route-piece {
@@ -4293,21 +4314,25 @@ textarea {
 .inline-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
+}
+
+.inline-actions {
+  justify-content: center;
 }
 
 .tool-grid button {
-  flex: 1 1 116px;
+  flex: 1 1 104px;
 }
 
 .selection-panel {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   border: 1px solid rgba(71, 116, 87, 0.35);
   background: rgba(255, 250, 240, 0.72);
-  border-radius: 8px;
-  padding: 10px;
-  margin-bottom: 10px;
+  border-radius: 7px;
+  padding: 8px;
+  margin-bottom: 8px;
 }
 
 .selection-panel p {
@@ -4321,47 +4346,69 @@ textarea {
 .debug-row,
 .mini-form {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
   flex-wrap: wrap;
 }
 
-.player-trade-box {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 10px;
+.trade-row select {
+  min-width: 0;
+  flex: 1 1 104px;
+}
+
+.trade-panel-box select {
+  width: 100%;
+  min-width: 0;
+}
+
+.trade-panel-box {
+  border: 1px solid rgba(201, 183, 130, 0.4);
+  border-radius: 7px;
+  padding: 8px;
   display: grid;
-  gap: 10px;
-  background: rgba(255, 250, 240, 0.58);
+  gap: 7px;
+  background: rgba(255, 250, 240, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(47, 41, 26, 0.16);
+}
+
+.trade-panel-actions button {
+  flex: 0 0 auto;
 }
 
 .trade-bundles {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 7px;
 }
 
 .resource-editor {
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .resource-stepper {
   display: grid;
-  grid-template-columns: 20px 1fr 30px 26px 30px;
-  gap: 4px;
+  grid-template-columns: 18px minmax(34px, 1fr) 26px 22px 26px;
+  gap: 3px;
   align-items: center;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .resource-stepper-asset-icon {
-  width: 19px;
-  height: 19px;
+  justify-self: center;
+  width: 18px;
+  height: 18px;
+}
+
+.resource-stepper span {
+  min-width: 0;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
 }
 
 .resource-stepper button {
-  min-height: 28px;
-  padding: 4px;
+  min-height: 24px;
+  padding: 3px;
 }
 
 .resource-stepper b {
@@ -4721,8 +4768,8 @@ textarea {
 
 .turn-timer-card {
   display: grid;
-  gap: 7px;
-  padding: 10px 12px;
+  gap: 5px;
+  padding: 8px 10px;
 }
 
 .turn-timer-card > div:first-child {
@@ -4740,7 +4787,7 @@ textarea {
 
 .turn-timer-card strong {
   color: #3a2118;
-  font-size: 22px;
+  font-size: 19px;
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
@@ -4769,24 +4816,24 @@ textarea {
 
 .action-card {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .operation-tabs-card {
-  padding: 10px;
+  padding: 8px;
 }
 
 .action-tabs {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
+  gap: 5px;
 }
 
 .action-tabs button {
   min-width: 0;
-  min-height: 35px;
-  padding: 7px 5px;
-  font-size: 12px;
+  min-height: 31px;
+  padding: 5px 4px;
+  font-size: 11px;
   line-height: 1.1;
 }
 
@@ -4799,7 +4846,7 @@ textarea {
 .action-pane,
 .action-subsection {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .ui-asset-icon {
@@ -4808,13 +4855,16 @@ textarea {
   display: inline-grid;
   place-items: center;
   flex: 0 0 auto;
+  overflow: visible;
 }
 
 .ui-asset-icon img {
   display: block;
-  max-width: 100%;
-  max-height: 100%;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
+  object-position: center;
+  transform-origin: center;
   filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.7));
 }
 
@@ -4909,8 +4959,27 @@ textarea {
 
 .tool-card-asset-icon {
   grid-row: 1 / span 2;
+  justify-self: center;
   width: 32px;
   height: 32px;
+}
+
+.tool-card-asset-icon img {
+  transform: scale(0.88);
+}
+
+.tool-card-asset-icon-watchtower img {
+  transform: translateY(-6px) scale(0.76);
+}
+
+.move-convoy-tool-card {
+  align-content: center;
+}
+
+.move-convoy-tool-card > span:not(.ui-asset-icon) {
+  grid-row: 1 / span 2;
+  align-self: center;
+  line-height: 1;
 }
 
 .tool-card small {
@@ -4931,8 +5000,13 @@ textarea {
 }
 
 .dev-buy-panel-asset-icon {
+  justify-self: center;
   width: 48px;
   height: 58px;
+}
+
+.dev-buy-panel-asset-icon img {
+  transform: scale(0.86);
 }
 
 .dev-buy-button {
@@ -4942,6 +5016,43 @@ textarea {
 .inline-action-asset-icon {
   width: 20px;
   height: 20px;
+}
+
+.inline-action-asset-icon img {
+  transform: scale(0.78);
+}
+
+.militia-option-card {
+  align-content: center;
+}
+
+.militia-option-asset-icon,
+.militia-command-asset-icon {
+  align-self: center;
+}
+
+.tool-card-asset-icon.militia-option-asset-icon img {
+  transform: translateY(-5px) scale(0.82);
+}
+
+.inline-action-asset-icon.militia-command-asset-icon img {
+  transform: translateY(-3px) scale(0.8);
+}
+
+.inline-action-asset-icon.militia-expel-asset-icon img {
+  transform: translateY(1px) scale(0.8);
+}
+
+.resource-stepper-asset-icon img {
+  transform: scale(0.92);
+}
+
+.resource-stepper-asset-icon-fuel img {
+  transform: scale(0.76);
+}
+
+.resource-stepper-asset-icon-ammo img {
+  transform: scale(0.68);
 }
 
 .militia-command-row {
@@ -5417,6 +5528,20 @@ textarea {
 
 .shell-error {
   pointer-events: auto;
+  justify-content: center;
+  text-align: center;
+  color: rgba(244, 211, 194, 0.94);
+  border: 1px solid rgba(159, 74, 49, 0.42);
+  background:
+    linear-gradient(180deg, rgba(57, 38, 31, 0.84), rgba(24, 21, 18, 0.76)),
+    rgba(20, 18, 15, 0.72);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(5px);
+}
+
+.shell-error span {
+  flex: 0 1 auto;
+  text-align: center;
 }
 
 .zombie-siege-alert {
@@ -5598,7 +5723,7 @@ textarea {
   --ui-top-height: 148px;
   --ui-bottom-height: 172px;
   --ui-left-width: 230px;
-  --ui-right-width: 352px;
+  --ui-right-width: 332px;
   --hand-card-width: 182px;
   --hand-card-height: 269px;
   --hand-fan-height: 182px;
@@ -5841,20 +5966,39 @@ textarea {
 }
 
 .right-operation-dock {
-  top: calc(var(--ui-gutter) + var(--ui-top-height) + 14px);
+  top: calc(var(--ui-gutter) + 6px);
   right: var(--ui-gutter);
-  bottom: 16px;
+  bottom: 12px;
   width: var(--ui-right-width);
   min-width: 0;
   display: grid;
   grid-auto-rows: min-content;
   align-content: end;
-  gap: 8px;
+  gap: 6px;
+  font-size: 92%;
+  line-height: 1.18;
   max-height: none;
   overflow-y: auto;
   overflow-x: hidden;
   padding-right: 0;
   transform: none;
+}
+
+.right-operation-dock .panel,
+.right-operation-dock .selection-panel {
+  padding: 8px 10px;
+}
+
+.right-operation-dock button,
+.right-operation-dock select {
+  min-height: 30px;
+  padding: 5px 8px;
+  border-radius: 7px;
+}
+
+.right-operation-dock .tool-card {
+  min-height: 44px;
+  padding: 6px 8px;
 }
 
 .bottom-hand {
@@ -6388,11 +6532,11 @@ textarea {
 .right-operation-dock > details,
 .right-operation-dock .dock-utility-row,
 .right-operation-dock .selection-panel {
-  border-radius: 8px;
+  border-radius: 7px;
 }
 
 .dock-title {
-  padding: 9px 11px;
+  padding: 7px 10px;
 }
 
 .dock-cost-button {
@@ -6401,9 +6545,9 @@ textarea {
   justify-content: flex-start;
   gap: 8px;
   width: 100%;
-  min-height: 48px;
-  padding: 11px 12px;
-  font-size: 17px;
+  min-height: 40px;
+  padding: 8px 10px;
+  font-size: 15px;
   font-weight: 900;
   text-align: left;
 }
@@ -6411,16 +6555,16 @@ textarea {
 .dock-utility-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
 }
 
 .dock-mini-button {
   min-width: 0;
-  min-height: 38px;
-  padding: 8px 10px;
+  min-height: 32px;
+  padding: 6px 8px;
   justify-content: center;
-  gap: 7px;
-  font-size: 13px;
+  gap: 6px;
+  font-size: 12px;
   font-weight: 950;
   line-height: 1;
   white-space: nowrap;
@@ -8956,7 +9100,7 @@ textarea {
 }
 
 .operation-tabs-card {
-  padding: 9px;
+  padding: 7px;
 }
 
 .action-tabs {
@@ -9001,17 +9145,18 @@ textarea {
   position: relative;
   isolation: isolate;
   display: grid;
-  grid-template-columns: 98px minmax(0, 1fr);
+  grid-template-columns: max-content max-content;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
+  gap: 10px;
   width: 100%;
-  min-height: 92px;
-  padding: 12px 18px 12px 14px;
+  min-height: 74px;
+  padding: 8px 14px;
   overflow: hidden;
   border: 1px solid rgba(190, 178, 133, 0.42);
   border-radius: 5px;
   color: #eadfc4;
-  text-align: left;
+  text-align: center;
   background:
     linear-gradient(180deg, rgba(55, 61, 37, 0.96), rgba(31, 42, 24, 0.96)),
     repeating-linear-gradient(135deg, rgba(255, 244, 205, 0.045) 0 1px, transparent 1px 8px);
@@ -9093,27 +9238,28 @@ textarea {
 .turn-button-copy {
   position: relative;
   z-index: 1;
+  transform: translateX(-8px);
 }
 
 .turn-button-art-frame {
-  width: 92px;
-  height: 66px;
+  width: 72px;
+  height: 52px;
   display: grid;
   place-items: center;
 }
 
 .turn-button-art {
   display: block;
-  max-width: 96px;
-  max-height: 74px;
+  max-width: 76px;
+  max-height: 58px;
   object-fit: contain;
   filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.72));
 }
 
 .illustrated-turn-button-end .turn-button-art,
 .illustrated-turn-button-muted .turn-button-art {
-  max-width: 56px;
-  max-height: 68px;
+  max-width: 46px;
+  max-height: 54px;
   opacity: 0.68;
   filter:
     grayscale(0.42)
@@ -9124,14 +9270,15 @@ textarea {
 .turn-button-copy {
   min-width: 0;
   display: grid;
-  gap: 5px;
+  justify-items: center;
+  gap: 3px;
 }
 
 .turn-button-copy strong {
   display: block;
   overflow-wrap: anywhere;
   color: #f4dfb9;
-  font-size: 28px;
+  font-size: 23px;
   font-weight: 950;
   line-height: 1;
   letter-spacing: 0;
@@ -9147,7 +9294,7 @@ textarea {
   display: block;
   overflow-wrap: anywhere;
   color: rgba(238, 224, 192, 0.86);
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 800;
   line-height: 1.18;
 }

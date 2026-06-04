@@ -233,7 +233,7 @@ describe("RightOperationDock", () => {
     expect(screen.getByText("率先在自己的回合达到 12 点胜利点即可获胜。")).toBeInTheDocument();
     expect(screen.getByText("掷骰产资源 → 处理尸潮 → 交易 → 建造 → 民兵 / 发展卡 → 检查胜利。")).toBeInTheDocument();
     expect(screen.getByText("骰子点数等于地块数字时，相邻建筑获得资源。营地获得 1 张，堡垒获得 2 张。尸潮所在地块不产资源。")).toBeInTheDocument();
-    expect(screen.getByText("每名玩家首次在非起始资源区的新资源区建立营地时，额外获得 1 点胜利点；同一玩家在每个新资源区最多获得一次该奖励。")).toBeInTheDocument();
+    expect(screen.getByText("每名玩家首次在非起始的新资源区建立营地时，额外获得 1 点胜利点；同一玩家在每个新资源区最多获得一次该奖励。")).toBeInTheDocument();
     expect(screen.getByText("民兵需要先征召，再支付食物激活。只有已激活民兵可以防御、驱逐尸潮或移动。")).toBeInTheDocument();
     expect(screen.getByText("每回合最多使用 1 张发展卡，本回合购买的发展卡不能立刻使用。秘密据点在达到胜利条件时公开计分。")).toBeInTheDocument();
   });
@@ -268,6 +268,11 @@ describe("RightOperationDock", () => {
     expect(screen.getByText("房间状态")).toBeInTheDocument();
     expect(screen.getByText("已连接")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "复制房间码 ROOM42" })).toBeInTheDocument();
+    expect(screen.getByText("规则与本局信息")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /查看规则说明/ })).toBeInTheDocument();
+    expect(screen.getByText("当前模式")).toBeInTheDocument();
+    expect(screen.getByText("在线联机")).toBeInTheDocument();
+    expect(screen.getByText("12分")).toBeInTheDocument();
     expect(screen.getByLabelText("游戏背景音乐音量")).toBeInTheDocument();
     expect(screen.getByLabelText("游戏音效音量")).toBeInTheDocument();
 
@@ -403,6 +408,36 @@ describe("RightOperationDock", () => {
     expect(setSelection).toHaveBeenLastCalledWith(undefined);
   });
 
+  it("submits the selected resource for requisition", () => {
+    const state = setupActionState();
+    const submit = vi.fn();
+    render(
+      <RightOperationDock
+        state={state}
+        mode="freeAction"
+        tool="none"
+        selection={{ kind: "devRequisition", cardId: "req-card" }}
+        viewerPlayerId={state.currentPlayerId}
+        interactionMode="hot-seat"
+        animationBusy={false}
+        submit={submit}
+        setTool={vi.fn()}
+        setSelection={vi.fn()}
+        onClear={vi.fn()}
+      />
+    );
+
+    const panel = screen.getByText("征用物资").closest(".selection-panel");
+    expect(panel).toBeTruthy();
+    fireEvent.click(within(panel as HTMLElement).getByRole("button", { name: "木材" }));
+
+    expect(submit).toHaveBeenCalledWith({
+      type: "playDevelopmentCard",
+      cardId: "req-card",
+      payload: { resource: "wood" }
+    });
+  });
+
   it("opens the trade panel without a prefilled offer", () => {
     const state = setupActionState();
     const { container } = render(
@@ -421,7 +456,7 @@ describe("RightOperationDock", () => {
     );
 
     const selects = container.querySelectorAll<HTMLSelectElement>(".trade-row select");
-    const bankTradeButton = container.querySelector<HTMLButtonElement>(".trade-row button");
+    const bankTradeButton = container.querySelector<HTMLButtonElement>(".trade-panel-actions button");
     const offerCounts = container.querySelectorAll<HTMLElement>(".player-trade-box .resource-stepper b");
     const offerButton = container.querySelector<HTMLButtonElement>(".player-trade-box .inline-actions button");
 
@@ -430,6 +465,55 @@ describe("RightOperationDock", () => {
     expect(bankTradeButton).toBeDisabled();
     expect([...offerCounts].every((item) => item.textContent === "0")).toBe(true);
     expect(offerButton).toBeDisabled();
+  });
+
+  it("uses the last edited trade section for operation hints", async () => {
+    const state = setupActionState();
+    const setOperationContext = vi.fn();
+    const { container } = render(
+      <RightOperationDock
+        state={state}
+        mode="freeAction"
+        tool="none"
+        viewerPlayerId={state.currentPlayerId}
+        interactionMode="hot-seat"
+        animationBusy={false}
+        submit={vi.fn()}
+        setTool={vi.fn()}
+        setSelection={vi.fn()}
+        setOperationContext={setOperationContext}
+        onClear={vi.fn()}
+      />
+    );
+
+    const bankSelects = container.querySelectorAll<HTMLSelectElement>(".trade-row select");
+    fireEvent.change(bankSelects[0], { target: { value: "food" } });
+    fireEvent.change(bankSelects[1], { target: { value: "metal" } });
+
+    await waitFor(() =>
+      expect(setOperationContext).toHaveBeenLastCalledWith({
+        kind: "bankTrade",
+        give: "food",
+        receive: "metal",
+        rate: expect.any(Number),
+        canTrade: true
+      })
+    );
+
+    const playerTradeBox = container.querySelector<HTMLElement>(".player-trade-box");
+    expect(playerTradeBox).toBeTruthy();
+    const offerEditor = playerTradeBox!.querySelector<HTMLElement>(".resource-editor");
+    expect(offerEditor).toBeTruthy();
+    fireEvent.click(within(offerEditor!).getByRole("button", { name: "食物增加" }));
+
+    await waitFor(() =>
+      expect(setOperationContext).toHaveBeenLastCalledWith({
+        kind: "playerTrade",
+        target: "public",
+        offerTotal: 1,
+        requestTotal: 0
+      })
+    );
   });
 
   it("enables buying development cards from an online materialized state", () => {
@@ -492,7 +576,10 @@ describe("RightOperationDock", () => {
     expect(screen.getByRole("heading", { name: "征召与激活" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /征召民兵/ })).toBeInTheDocument();
     expect(screen.getByText("点击己方营地或堡垒征召民兵，每处最多驻守 2 个。")).toBeInTheDocument();
-    expect(screen.getByText("点击已征召民兵的营地或堡垒激活民兵，激活的民兵下回合才能使用。")).toBeInTheDocument();
+    expect(screen.getByText("点击驻有未激活民兵的己方营地或堡垒，支付食物激活；本回合刚激活的民兵不能主动行动，但可参与尸潮防御。")).toBeInTheDocument();
+    expect(document.querySelector(".militia-activation-block")).toContainElement(
+      screen.getByText("点击驻有未激活民兵的己方营地或堡垒，支付食物激活；本回合刚激活的民兵不能主动行动，但可参与尸潮防御。")
+    );
     expect(screen.queryByRole("heading", { name: "已部署民兵" })).not.toBeInTheDocument();
     expect(screen.queryByText("当前没有可指挥的民兵。")).not.toBeInTheDocument();
     expect(screen.queryByText(/部署/)).not.toBeInTheDocument();
@@ -574,6 +661,44 @@ describe("RightOperationDock", () => {
     expect(within(convoyToolRow as HTMLElement).getByRole("button", { name: /装甲车队/ })).toBeInTheDocument();
     expect(within(convoyToolRow as HTMLElement).getByRole("button", { name: /移动车队/ })).toBeInTheDocument();
     expect(legalBuildEdges(state, "transport").length).toBeGreaterThan(0);
+  });
+
+  it("only enables build tools when the player can pay their cost", () => {
+    const state = applyCommand(setupActionState(), {
+      type: "debugSetResources",
+      playerId: "p1",
+      resources: createResources()
+    });
+    const setTool = vi.fn();
+    const setSelection = vi.fn();
+    render(
+      <RightOperationDock
+        state={state}
+        mode="freeAction"
+        tool="none"
+        viewerPlayerId={state.currentPlayerId}
+        interactionMode="hot-seat"
+        animationBusy={false}
+        submit={vi.fn()}
+        setTool={setTool}
+        setSelection={setSelection}
+        onClear={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: /建造/ }));
+    setTool.mockClear();
+    setSelection.mockClear();
+
+    const transportButton = screen.getByRole("button", { name: /运输线/ });
+    const campButton = screen.getByRole("button", { name: /营地/ });
+    expect(transportButton).toBeDisabled();
+    expect(campButton).toBeDisabled();
+
+    fireEvent.click(transportButton);
+
+    expect(setTool).not.toHaveBeenCalledWith("transport");
+    expect(setSelection).not.toHaveBeenCalled();
   });
 
   it("clears move convoy selection when another build tool is chosen", () => {

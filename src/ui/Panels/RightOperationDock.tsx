@@ -2,20 +2,21 @@ import { Compass, Flag, Menu, PauseCircle, Skull, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { createPortal } from "react-dom";
 import type { Command, GameState, RouteType } from "../../domain/types";
+import { RESOURCES, RESOURCE_LABELS } from "../../domain/constants";
 import { BuildAction } from "../Actions/BuildAction";
+import { AssetIcon } from "../Actions/AssetIcon";
 import { BuyDevelopmentCardAction } from "../Actions/BuyDevelopmentCardAction";
 import { DiceAction } from "../Actions/DiceAction";
 import { MainTurnButton } from "../Actions/MainTurnButton";
 import { MilitiaAction } from "../Actions/MilitiaAction";
 import { TradeAction } from "../Actions/TradeAction";
-import { phaseLabels, type InteractionMode, type UiSelection, type UiTool } from "../gameUiTypes";
+import { resourceIconAssets } from "../art/assetManifest";
+import { phaseLabels, type ActionTab, type InteractionMode, type UiOperationContext, type UiSelection, type UiTool } from "../gameUiTypes";
 import type { TurnUiMode } from "../selectors/turnUiMode";
 import { BuildCostPanel } from "./BuildCostPanel";
 import { OnlineRoomPanel } from "./OnlineRoomPanel";
 import { PendingPanel } from "./PendingPanel";
 import { PersistencePanel } from "./PersistencePanel";
-
-type ActionTab = "trade" | "build" | "militia" | "development";
 
 const ACTION_TABS: Array<{ id: ActionTab; label: string }> = [
   { id: "trade", label: "交易" },
@@ -41,6 +42,7 @@ export function RightOperationDock({
   submit,
   setTool,
   setSelection,
+  setOperationContext,
   onClear,
   onReconnectOnlineRoom,
   onLeaveOnlineRoom
@@ -61,6 +63,7 @@ export function RightOperationDock({
   submit: (command: Command) => void;
   setTool: (tool: UiTool) => void;
   setSelection: Dispatch<SetStateAction<UiSelection | undefined>>;
+  setOperationContext?: Dispatch<SetStateAction<UiOperationContext | undefined>>;
   onClear: () => void;
   onReconnectOnlineRoom?: () => void;
   onLeaveOnlineRoom?: () => void;
@@ -96,11 +99,12 @@ export function RightOperationDock({
     setRefreshSerial((value) => value + 1);
     setTool("none");
     setSelection(undefined);
+    setOperationContext?.(undefined);
     setShowBuildCost(false);
     if (contextChanged || mode !== "freeAction" || state.phase !== "action") {
       setActiveTab("trade");
     }
-  }, [dockContextKey, mode, setSelection, setTool, state]);
+  }, [dockContextKey, mode, setOperationContext, setSelection, setTool, state]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -135,7 +139,15 @@ export function RightOperationDock({
         <SelectionPanel state={state} selection={selection} setSelection={setSelection} submit={submit} />
       )}
 
-      {canInteract && mode === "pending" && <PendingPanel key={panelRefreshKey} state={state} submit={submit} setTool={setTool} />}
+      {canInteract && mode === "pending" && (
+        <PendingPanel
+          key={panelRefreshKey}
+          state={state}
+          submit={submit}
+          setTool={setTool}
+          setOperationContext={setOperationContext}
+        />
+      )}
       {canInteract && mode === "mustRoll" && <DiceAction key={panelRefreshKey} state={state} submit={submit} />}
       {mode === "victory" && <VictoryPanel state={state} />}
       {canInteract && mode === "freeAction" && state.phase === "setup" && <SetupAction tool={tool} setTool={setTool} />}
@@ -162,14 +174,23 @@ export function RightOperationDock({
                 aria-selected={activeTab === tab.id}
                 onClick={() => {
                   setActiveTab(tab.id);
-                  if (tab.id === "trade" || tab.id === "development") setTool("none");
+                  setTool("none");
+                  setSelection(undefined);
+                  setOperationContext?.(undefined);
                 }}
               >
                 <span>{tab.label}</span>
               </button>
             ))}
           </div>
-          {activeTab === "trade" && <TradeAction key={panelRefreshKey} state={state} submit={submit} />}
+          {activeTab === "trade" && (
+            <TradeAction
+              key={panelRefreshKey}
+              state={state}
+              submit={submit}
+              setOperationContext={setOperationContext}
+            />
+          )}
           {activeTab === "build" && (
             <BuildAction key={panelRefreshKey} state={state} tool={tool} setTool={setTool} setSelection={setSelection} />
           )}
@@ -182,7 +203,13 @@ export function RightOperationDock({
               setSelection={setSelection}
             />
           )}
-          {activeTab === "development" && <BuyDevelopmentCardAction key={panelRefreshKey} state={state} submit={submit} />}
+          {activeTab === "development" && (
+            <BuyDevelopmentCardAction
+              key={panelRefreshKey}
+              state={state}
+              submit={submit}
+            />
+          )}
         </section>
       )}
 
@@ -242,6 +269,7 @@ export function RightOperationDock({
               </header>
               {interactionMode === "online" && onlineRoomCode && onlineConnectionState && onLeaveOnlineRoom ? (
                 <OnlineRoomPanel
+                  state={state}
                   roomCode={onlineRoomCode}
                   connectionState={onlineConnectionState}
                   onClose={() => setShowSystemMenu(false)}
@@ -340,7 +368,11 @@ function SelectionPanel({
     return (
       <div className="selection-panel dock-selection-panel">
         <strong>移动民兵</strong>
-        <p>点击一个通过己方路线相连、且驻守未满的营地或堡垒。</p>
+        <p>
+          {selection.militiaId
+            ? "点击一个通过己方路线相连、且驻守未满的营地或堡垒。"
+            : "先点击一个驻有可移动已激活民兵的己方营地或堡垒。"}
+        </p>
         {cancel}
       </div>
     );
@@ -386,6 +418,35 @@ function SelectionPanel({
           </button>
           {cancel}
         </div>
+      </div>
+    );
+  }
+
+  if (selection.kind === "devRequisition") {
+    return (
+      <div className="selection-panel dock-selection-panel">
+        <strong>征用物资</strong>
+        <p>选择一种资源，征用所有其他玩家手中的该资源。</p>
+        <div className="resource-buttons requisition-resource-buttons">
+          {RESOURCES.map((resource) => (
+            <button
+              key={resource}
+              onClick={() =>
+                submit({
+                  type: "playDevelopmentCard",
+                  cardId: selection.cardId,
+                  payload: { resource }
+                })
+              }
+            >
+              {resourceIconAssets[resource].imageUrl && (
+                <AssetIcon src={resourceIconAssets[resource].imageUrl} className="inline-action-asset-icon" />
+              )}
+              {RESOURCE_LABELS[resource]}
+            </button>
+          ))}
+        </div>
+        {cancel}
       </div>
     );
   }

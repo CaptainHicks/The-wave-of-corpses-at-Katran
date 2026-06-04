@@ -23,7 +23,6 @@ export function BuyDevelopmentCardAction({
           <p className="muted-line">剩余牌数</p>
         </div>
         <button className="primary dev-buy-button" disabled={!canBuy} onClick={() => submit({ type: "buyDevelopmentCard" })}>
-          <AssetIcon src="/assets/hud/dev-card-back.v1.webp" className="inline-action-asset-icon" />
           购买发展卡
         </button>
       </div>

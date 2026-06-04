@@ -172,7 +172,7 @@ export function createGame(
   debugMode = false,
   fogEnabled = true
 ): GameState {
-  assertRule(players.length >= 2 && players.length <= 6, "本地热座版支持2到6名玩家。");
+  assertRule(players.length >= 2 && players.length <= 6, "本地热座支持 2 到 6 名玩家。");
   const board = createStandardBoard(seed, { avoidStructureSignature: lastGameBoardStructureSignature });
   lastGameBoardStructureSignature = board.structureSignature;
   if (!fogEnabled) {
@@ -216,7 +216,7 @@ export function createGame(
 }
 
 function ensureNoPending(state: GameState): void {
-  assertRule(!state.pending, "请先处理当前待决选择。");
+  assertRule(!state.pending, "请先处理当前待处理事项。");
 }
 
 function isLegacyActionPhase(phase: string): boolean {
@@ -227,7 +227,7 @@ function isActionWindowPhase(phase: string): boolean {
   return phase === "action" || isLegacyActionPhase(phase);
 }
 
-function assertActionWindow(state: GameState, message = "Roll dice before taking actions."): void {
+function assertActionWindow(state: GameState, message = "请先掷骰，再进行行动。"): void {
   ensureNoPending(state);
   assertRule(isActionWindowPhase(state.phase), message);
   if (state.phase !== "action") state.phase = "action";
@@ -317,7 +317,7 @@ function grantInitialResources(state: GameState, player: PlayerState, vertexId: 
     const resource = tileResource(tile);
     if (tile.revealed && resource) {
       gain(player, { [resource]: 1 });
-      event(state, `${player.name} 从第二营地获得1${resourceName(resource)}。`);
+      event(state, `${player.name} 从第二个营地获得 1 张${resourceName(resource)}。`);
     }
   });
   if (warehouseCount > 0) {
@@ -349,7 +349,7 @@ function startPreparePhase(state: GameState): void {
   player.militia.forEach((militia) => {
     if (militia.status === "readying") militia.status = "active";
   });
-  event(state, `${player.name} 的准备阶段：准备中的民兵变为已激活。`);
+  event(state, `${player.name} 的准备阶段：民兵防线已就绪。`);
 }
 
 function assertDiceValues(dice: [number, number]): void {
@@ -397,7 +397,7 @@ function produceResources(state: GameState, number: number): void {
         const resource = tileResource(tile);
         if (resource) {
           gain(player, { [resource]: amount });
-          event(state, `${player.name} 从${tile.id}获得${amount}${resourceName(resource)}。`);
+          event(state, `${player.name} 从 ${tile.id} 获得 ${amount} 张${resourceName(resource)}。`);
         } else if (tile.hiddenType === "warehouse") {
           const nextChoice: PendingChoice = {
             kind: "chooseResource",
@@ -433,16 +433,16 @@ function startZombieSevenFlow(state: GameState): void {
     next = { kind: "discard", playerId: player.id, amount, next };
   });
   state.pending = next;
-  event(state, "掷出7：进入尸潮阶段。");
+  event(state, "掷出 7：进入尸潮阶段。");
   advanceZombieTrack(state, 1);
 }
 
 function resolveDiscard(state: GameState, resources: Partial<Resources>): void {
   assertRule(state.pending?.kind === "discard", "当前不需要弃牌。");
   const player = findPlayer(state, state.pending.playerId);
-  assertRule(resourceTotal(resources) === state.pending.amount, `必须弃掉${state.pending.amount}张资源。`);
+  assertRule(resourceTotal(resources) === state.pending.amount, `必须弃掉 ${state.pending.amount} 张资源。`);
   spend(player, resources);
-  event(state, `${player.name} 弃掉${state.pending.amount}张资源。`);
+  event(state, `${player.name} 弃掉 ${state.pending.amount} 张资源。`);
   state.pending = state.pending.next;
 }
 
@@ -453,7 +453,7 @@ function moveZombie(state: GameState, tileId: string): void {
   assertRule(tile.revealed, "尸潮不能移动到迷雾地块。");
   state.zombieTileId = tileId;
   const player = findPlayer(state, state.pending.playerId);
-  event(state, `${player.name} 将尸潮移动到${tile.id}。`);
+  event(state, `${player.name} 将尸潮移动到 ${tile.id}。`);
   const targets = adjacentPlayersToTile(state.board, tileId).filter((id) => id !== player.id);
   state.pending =
     state.pending.stealAfterMove && targets.length > 0
@@ -479,7 +479,7 @@ function stealResource(state: GameState, targetPlayerId?: string): void {
     const resource = available[index];
     target.resources[resource] -= 1;
     actor.resources[resource] += 1;
-    event(state, `${actor.name} 从${target.name}随机抽取1张资源。`);
+    event(state, `${actor.name} 从 ${target.name} 随机抽取 1 张资源。`);
   }
   state.pending = undefined;
   if (state.phase === "zombie") state.phase = "action";
@@ -511,7 +511,7 @@ function resolveSiege(state: GameState): void {
       event(state, `尸潮围城防守成功，${leaders[0].name} 获得卡坦保卫者得分牌。`);
     } else if (leaders.length > 1) {
       leaders.forEach((player) => drawDevCard(state, player));
-      event(state, "尸潮围城防守成功但最高民兵并列，并列玩家各获得1张发展卡。");
+      event(state, "尸潮围城防守成功，最高民兵并列，相关玩家各获得 1 张发展卡。");
     } else {
       event(state, "尸潮围城防守成功。");
     }
@@ -531,11 +531,12 @@ function resolveSiege(state: GameState): void {
       next = { kind: "downgradeFortress", playerId: player.id, vertexIds, next };
     });
     state.pending = next;
-    event(state, "尸潮围城防守失败，防御最低且拥有堡垒的玩家需要降级1座堡垒。");
+    event(state, "尸潮围城防守失败，防御最低且拥有堡垒的玩家需要降级 1 座堡垒。");
   }
   state.players.forEach((player) => {
     player.militia.forEach((militia) => {
       militia.status = "inactive";
+      militia.activatedTurn = undefined;
     });
   });
   state.zombieTrack = 0;
@@ -544,7 +545,7 @@ function resolveSiege(state: GameState): void {
 
 function resolveDowngrade(state: GameState, vertexId: string): void {
   assertRule(state.pending?.kind === "downgradeFortress", "当前不需要降级堡垒。");
-  assertRule(state.pending.vertexIds.includes(vertexId), "请选择自己的1座堡垒降级。");
+  assertRule(state.pending.vertexIds.includes(vertexId), "请选择自己的 1 座堡垒降级。");
   const vertex = state.board.vertices[vertexId];
   const player = findPlayer(state, state.pending.playerId);
   assertRule(vertex.building?.ownerId === player.id && vertex.building.type === "fortress", "该位置不是你的堡垒。");
@@ -555,7 +556,7 @@ function resolveDowngrade(state: GameState, vertexId: string): void {
   }
   player.pieces.fortresses += 1;
   player.pieces.camps -= 1;
-  event(state, `${player.name} 将1座堡垒降级为营地。`);
+  event(state, `${player.name} 将 1 座堡垒降级为营地。`);
   state.pending = state.pending.next;
 }
 
@@ -568,10 +569,10 @@ function drawDevCard(state: GameState, player: PlayerState): DevCard | undefined
 
 function chooseResource(state: GameState, resources: Partial<Resources>): void {
   assertRule(state.pending?.kind === "chooseResource", "当前不需要选择资源。");
-  assertRule(resourceTotal(resources) === state.pending.amount, `必须选择${state.pending.amount}张资源。`);
+  assertRule(resourceTotal(resources) === state.pending.amount, `必须选择 ${state.pending.amount} 张资源。`);
   const player = findPlayer(state, state.pending.playerId);
   gain(player, resources);
-  event(state, `${player.name} 选择获得${state.pending.amount}张资源。`);
+  event(state, `${player.name} 选择获得 ${state.pending.amount} 张资源。`);
   state.pending = state.pending.next;
 }
 
@@ -582,9 +583,9 @@ function endPhase(state: GameState): void {
     return;
   }
   if (state.phase === "dice") {
-    throw new RuleError("Roll dice before ending the dice step.");
+    throw new RuleError("请先掷骰，再结束掷骰阶段。");
   }
-  assertRule(isActionWindowPhase(state.phase), "This phase cannot be advanced manually.");
+  assertRule(isActionWindowPhase(state.phase), "当前阶段不能手动推进。");
   state.phase = "action";
 }
 
@@ -698,7 +699,7 @@ function maybeCurrentPlayerWins(state: GameState): boolean {
   if (score.total >= VICTORY_POINTS_TO_WIN) {
     state.phase = "victory";
     state.winnerId = player.id;
-    event(state, `${player.name} 达到${score.total}点胜利点，赢得游戏。`);
+    event(state, `${player.name} 达到 ${score.total} 点胜利点，赢得游戏。`);
     return true;
   }
   return false;
@@ -721,7 +722,7 @@ function playerTrade(
   offer: Partial<Resources>,
   request: Partial<Resources>
 ): void {
-  assertActionWindow(state, "Player trades require the action phase.");
+  assertActionWindow(state, "玩家交易只能在行动阶段进行。");
   const actor = currentPlayer(state);
   const targetIds = targetPlayerId
     ? [findPlayer(state, targetPlayerId).id]
@@ -748,7 +749,7 @@ function playerTrade(
 
 function confirmPlayerTrade(state: GameState, accept: boolean): void {
   assertRule(state.pending?.kind === "confirmTrade", "当前没有待确认的玩家交易。");
-  assertRule(isActionWindowPhase(state.phase), "Player trades require the action phase.");
+  assertRule(isActionWindowPhase(state.phase), "玩家交易只能在行动阶段进行。");
   const pending = state.pending;
   const actor = findPlayer(state, pending.actorId);
   const target = findPlayer(state, pending.targetPlayerId);
@@ -815,18 +816,18 @@ function legalTradeRates(state: GameState, player: PlayerState, give: Resource):
 }
 
 function bankTrade(state: GameState, give: Resource, receive: Resource, rate?: 2 | 3 | 4): void {
-  assertActionWindow(state, "Bank trades require the action phase.");
+  assertActionWindow(state, "银行和黑市交易只能在行动阶段进行。");
   const player = currentPlayer(state);
   const legalRates = legalTradeRates(state, player, give);
   const actualRate = rate ?? legalRates[0];
   assertRule(legalRates.includes(actualRate), "当前没有该贸易比例。");
   spend(player, { [give]: actualRate });
   gain(player, { [receive]: 1 });
-  event(state, `${player.name} 用 ${actualRate}:1 交易获得1${resourceName(receive)}。`);
+  event(state, `${player.name} 用 ${actualRate}:1 交易获得 1 张${resourceName(receive)}。`);
 }
 
 function buildRoute(state: GameState, edgeId: string, routeType: RouteType, free?: boolean): void {
-  assertActionWindow(state, "Routes require the action phase.");
+  assertActionWindow(state, "建造路线只能在行动阶段进行。");
   const player = currentPlayer(state);
   const edge = state.board.edges[edgeId];
   assertRule(edge, "边不存在。");
@@ -852,9 +853,9 @@ function buildRoute(state: GameState, edgeId: string, routeType: RouteType, free
 }
 
 function moveConvoy(state: GameState, fromEdgeId: string, toEdgeId: string): void {
-  assertActionWindow(state, "Convoy movement requires the action phase.");
+  assertActionWindow(state, "移动装甲车队只能在行动阶段进行。");
   const player = currentPlayer(state);
-  assertRule(!player.movedConvoyThisTurn, "每名玩家每回合只能移动1个开放装甲车队。");
+  assertRule(!player.movedConvoyThisTurn, "每名玩家每回合只能移动 1 个开放装甲车队。");
   const from = state.board.edges[fromEdgeId];
   const to = state.board.edges[toEdgeId];
   assertRule(from?.route?.ownerId === player.id && from.route.type === "convoy", "起点必须是自己的装甲车队。");
@@ -870,7 +871,7 @@ function moveConvoy(state: GameState, fromEdgeId: string, toEdgeId: string): voi
   to.route = { ownerId: player.id, type: "convoy" };
   player.movedConvoyThisTurn = true;
   revealFromRoute(state, player, toEdgeId);
-  event(state, `${player.name} 移动1个开放装甲车队。`);
+  event(state, `${player.name} 移动 1 个开放装甲车队。`);
   updateAwards(state);
 }
 
@@ -883,7 +884,7 @@ function revealFromRoute(state: GameState, player: PlayerState, edgeId: string):
     const resource = tileResource(tile);
     if (resource) {
       gain(player, { [resource]: 1 });
-      event(state, `${player.name} 探索获得1${resourceName(resource)}。`);
+      event(state, `${player.name} 探索获得 1 张${resourceName(resource)}。`);
     } else if (tile.hiddenType === "warehouse") {
       queuePending(state, {
         kind: "chooseResource",
@@ -901,7 +902,7 @@ function revealFromRoute(state: GameState, player: PlayerState, edgeId: string):
         for (const resource of RESOURCES) {
           if (cursor < player.resources[resource]) {
             player.resources[resource] -= 1;
-            event(state, `${player.name} 探索感染区，随机失去1张资源。`);
+            event(state, `${player.name} 探索感染区，随机失去 1 张资源。`);
             break;
           }
           cursor -= player.resources[resource];
@@ -912,7 +913,7 @@ function revealFromRoute(state: GameState, player: PlayerState, edgeId: string):
 }
 
 function buildCamp(state: GameState, vertexId: string, free?: boolean): void {
-  assertActionWindow(state, "Camps require the action phase.");
+  assertActionWindow(state, "建造营地只能在行动阶段进行。");
   const vertex = state.board.vertices[vertexId];
   assertRule(vertex, "交叉点不存在。");
   assertRule(!vertex.building, "该交叉点已有建筑。");
@@ -939,7 +940,7 @@ function awardNewResourceZoneBonuses(state: GameState, player: PlayerState, vert
   state.awards.newResourceZones ??= {};
   state.awards.newResourceZones[player.id] = [...claimedByPlayer, ...newlyClaimed];
   newlyClaimed.forEach(() => {
-    event(state, `${player.name} 首次在新资源区建立营地，获得1胜利点。`);
+    event(state, `${player.name} 首次在新资源区建立营地，获得 1 点胜利点。`);
   });
 }
 
@@ -977,7 +978,7 @@ function smallResourceZoneId(board: BoardState, startTileId: string): string {
 }
 
 function upgradeFortress(state: GameState, vertexId: string, free?: boolean): void {
-  assertActionWindow(state, "Fortress upgrades require the action phase.");
+  assertActionWindow(state, "升级堡垒只能在行动阶段进行。");
   const vertex = state.board.vertices[vertexId];
   const player = currentPlayer(state);
   assertRule(vertex?.building?.ownerId === player.id && vertex.building.type === "camp", "只能升级自己的营地。");
@@ -990,7 +991,7 @@ function upgradeFortress(state: GameState, vertexId: string, free?: boolean): vo
 }
 
 function buildWatchtower(state: GameState, vertexId: string, free?: boolean): void {
-  assertActionWindow(state, "Watchtowers require the action phase.");
+  assertActionWindow(state, "建造哨塔只能在行动阶段进行。");
   const vertex = state.board.vertices[vertexId];
   const player = currentPlayer(state);
   assertRule(vertex?.building?.ownerId === player.id, "哨塔必须建在自己的营地或堡垒旁。");
@@ -1003,12 +1004,12 @@ function buildWatchtower(state: GameState, vertexId: string, free?: boolean): vo
 }
 
 function recruitMilitia(state: GameState, vertexId: string, free?: boolean): void {
-  assertActionWindow(state, "Recruiting militia requires the action phase.");
+  assertActionWindow(state, "征召民兵只能在行动阶段进行。");
   const vertex = state.board.vertices[vertexId];
   const player = currentPlayer(state);
   assertRule(vertex?.building?.ownerId === player.id, "民兵必须驻守在自己的营地或堡垒上。");
   const stationed = player.militia.filter((militia) => militia.vertexId === vertexId).length;
-  assertRule(stationed < 2, "每个营地或堡垒最多驻守2个民兵。");
+  assertRule(stationed < 2, "每个营地或堡垒最多驻守 2 个民兵。");
   assertRule(player.pieces.militia > 0, "民兵棋子不足。");
   takeCost(player, COSTS.militia, free);
   const militia: Militia = {
@@ -1019,7 +1020,7 @@ function recruitMilitia(state: GameState, vertexId: string, free?: boolean): voi
   };
   player.militia.push(militia);
   player.pieces.militia -= 1;
-  event(state, `${player.name} 征召1个民兵。`);
+  event(state, `${player.name} 征召 1 个民兵。`);
   updateAwards(state);
 }
 
@@ -1053,7 +1054,7 @@ function resolveMilitiaMobilizationVertices(
   const addVertex = (vertexId: string, strict: boolean) => {
     const vertex = state.board.vertices[vertexId];
     const canRecruit = canPlanRecruitMilitia(player, vertex, vertexId, plannedVertexIds);
-    if (strict) assertRule(canRecruit, "这张卡只能把民兵部署到自己的营地或堡垒，且每处最多2个。");
+    if (strict) assertRule(canRecruit, "这张卡只能把民兵部署到自己的营地或堡垒，且每处最多 2 个。");
     if (!canRecruit) return;
     plannedVertexIds.push(vertexId);
   };
@@ -1082,28 +1083,35 @@ function resolveMilitiaMobilizationVertices(
 }
 
 function activateMilitia(state: GameState, militiaId: string): void {
-  assertActionWindow(state, "Activating militia requires the action phase.");
+  assertActionWindow(state, "激活民兵只能在行动阶段进行。");
   const player = currentPlayer(state);
   const militia = player.militia.find((item) => item.id === militiaId);
   assertRule(militia, "民兵不存在。");
   assertRule(militia.status === "inactive", "只有未激活民兵可以激活。");
   takeCost(player, COSTS.activateMilitia);
-  militia.status = "readying";
-  event(state, `${player.name} 激活1个民兵，该民兵进入准备中。`);
+  militia.status = "active";
+  militia.activatedTurn = state.turn;
+  event(state, `${player.name} 激活 1 个民兵。`);
+}
+
+function militiaCanTakeActiveAction(state: GameState, militia: Militia | undefined): militia is Militia {
+  return Boolean(militia?.status === "active" && militia.activatedTurn !== state.turn);
 }
 
 function moveMilitia(state: GameState, militiaId: string, toVertexId: string): void {
-  assertActionWindow(state, "Moving militia requires the action phase.");
+  assertActionWindow(state, "移动民兵只能在行动阶段进行。");
   const player = currentPlayer(state);
   const militia = player.militia.find((item) => item.id === militiaId);
   assertRule(militia?.status === "active", "只有已激活民兵可以移动。");
+  assertRule(militiaCanTakeActiveAction(state, militia), "本回合刚激活的民兵不能立刻执行主动行动。");
   const target = state.board.vertices[toVertexId];
   assertRule(target?.building?.ownerId === player.id, "目标必须是自己的营地或堡垒。");
   assertRule(player.militia.filter((item) => item.vertexId === toVertexId).length < 2, "目标驻守已满。");
   assertRule(connectedByOwnRoutes(state.board, player.id, militia.vertexId, toVertexId), "民兵移动必须通过自己的路线连接。");
   militia.vertexId = toVertexId;
   militia.status = "inactive";
-  event(state, `${player.name} 移动1个民兵。`);
+  militia.activatedTurn = undefined;
+  event(state, `${player.name} 移动 1 个民兵。`);
 }
 
 function connectedByOwnRoutes(board: BoardState, playerId: string, from: string, to: string): boolean {
@@ -1156,10 +1164,11 @@ function edgeConnectedToPlayerNetworkExcluding(
 }
 
 function expelZombie(state: GameState, militiaId: string, toTileId: string, targetPlayerId?: string): void {
-  assertActionWindow(state, "Expelling zombies requires the action phase.");
+  assertActionWindow(state, "驱逐尸潮只能在行动阶段进行。");
   const player = currentPlayer(state);
   const militia = player.militia.find((item) => item.id === militiaId);
   assertRule(militia?.status === "active", "只有已激活民兵可以驱逐尸潮。");
+  assertRule(militiaCanTakeActiveAction(state, militia), "本回合刚激活的民兵不能立刻执行主动行动。");
   const vertex = state.board.vertices[militia.vertexId];
   assertRule(vertex.tileIds.includes(state.zombieTileId), "民兵所在建筑必须相邻尸潮所在地块。");
   const targetTile = state.board.tiles[toTileId];
@@ -1167,6 +1176,7 @@ function expelZombie(state: GameState, militiaId: string, toTileId: string, targ
   assertRule(toTileId !== state.zombieTileId, "必须将尸潮驱逐到另一个已翻开的地块。");
   state.zombieTileId = toTileId;
   militia.status = "inactive";
+  militia.activatedTurn = undefined;
   event(state, `${player.name} 使用民兵驱逐尸潮。`);
   const targets = adjacentPlayersToTile(state.board, toTileId).filter((id) => id !== player.id);
   if (targetPlayerId && targets.includes(targetPlayerId)) {
@@ -1178,21 +1188,21 @@ function expelZombie(state: GameState, militiaId: string, toTileId: string, targ
 }
 
 function buyDevelopmentCard(state: GameState): void {
-  assertActionWindow(state, "Buying development cards requires the action phase.");
+  assertActionWindow(state, "购买发展卡只能在行动阶段进行。");
   const player = currentPlayer(state);
   takeCost(player, COSTS.devCard);
   const card = drawDevCard(state, player);
   assertRule(card, "发展卡牌堆已空。");
-  event(state, `${player.name} 购买1张发展卡。`);
+  event(state, `${player.name} 购买 1 张发展卡。`);
 }
 
 function playDevelopmentCard(state: GameState, cardId: string, payload?: Record<string, unknown>): void {
-  assertActionWindow(state, "Playing development cards requires the action phase.");
+  assertActionWindow(state, "使用发展卡只能在行动阶段进行。");
   const player = currentPlayer(state);
   const card = player.devCards.find((item) => item.id === cardId);
   assertRule(card, "没有这张发展卡。");
   assertRule(card.type !== "secretBase", "秘密据点不需要主动使用，达到胜利条件时自动公开。");
-  assertRule(!player.usedDevCardThisTurn, "每回合最多使用1张发展卡。");
+  assertRule(!player.usedDevCardThisTurn, "每回合最多使用 1 张发展卡。");
   assertRule(card.purchasedTurn !== state.turn, "本回合购买的发展卡不能立刻使用。");
 
   player.usedDevCardThisTurn = true;
@@ -1201,7 +1211,7 @@ function playDevelopmentCard(state: GameState, cardId: string, payload?: Record<
   if (card.type === "militiaMobilization") {
     const vertexIds = resolveMilitiaMobilizationVertices(state, player, payload);
     vertexIds.forEach((vertexId) => recruitMilitia(state, vertexId, true));
-    event(state, `${player.name} 使用民兵动员征召${vertexIds.length}个民兵。`);
+    event(state, `${player.name} 使用民兵动员征召 ${vertexIds.length} 个民兵。`);
   } else if (card.type === "roadCrew") {
     const routePayload = payload?.routes as Array<{ edgeId: string; routeType: RouteType }> | undefined;
     const routes =
@@ -1219,17 +1229,7 @@ function playDevelopmentCard(state: GameState, cardId: string, payload?: Record<
   } else if (card.type === "airdrop") {
     state.pending = { kind: "chooseResource", playerId: player.id, amount: 2, reason: "airdrop" };
   } else if (card.type === "requisition") {
-    const resource =
-      (payload?.resource as Resource | undefined) ??
-      RESOURCES.reduce<Resource>((best, item) => {
-        const bestTotal = state.players
-          .filter((target) => target.id !== player.id)
-          .reduce((sum, target) => sum + target.resources[best], 0);
-        const itemTotal = state.players
-          .filter((target) => target.id !== player.id)
-          .reduce((sum, target) => sum + target.resources[item], 0);
-        return itemTotal > bestTotal ? item : best;
-      }, "food");
+    const resource = payload?.resource as Resource | undefined;
     assertRule(resource && RESOURCES.includes(resource), "征用物资必须指定资源。");
     state.players
       .filter((item) => item.id !== player.id)
@@ -1478,7 +1478,7 @@ export function legalMilitiaMoveVertices(state: GameState, militiaId: string): s
   if (state.phase !== "action") return [];
   const player = currentPlayer(state);
   const militia = player.militia.find((item) => item.id === militiaId);
-  if (militia?.status !== "active") return [];
+  if (!militiaCanTakeActiveAction(state, militia)) return [];
   return Object.values(state.board.vertices)
     .filter((vertex) => vertex.building?.ownerId === player.id)
     .filter((vertex) => vertex.id !== militia.vertexId)
@@ -1491,7 +1491,7 @@ export function legalExpelZombieMilitiaIds(state: GameState): string[] {
   if (state.phase !== "action") return [];
   const player = currentPlayer(state);
   return player.militia
-    .filter((militia) => militia.status === "active")
+    .filter((militia) => militiaCanTakeActiveAction(state, militia))
     .filter((militia) => state.board.vertices[militia.vertexId].tileIds.includes(state.zombieTileId))
     .map((militia) => militia.id);
 }

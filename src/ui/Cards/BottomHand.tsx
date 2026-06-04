@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { Command, GameState } from "../../domain/types";
 import type { GameAnimationEvent } from "../animation/animationTypes";
-import type { UiSelection, UiTool } from "../gameUiTypes";
+import type { UiOperationContext, UiSelection, UiTool } from "../gameUiTypes";
 import { DevCardHand } from "./DevCardHand";
 
 export function BottomHand({
@@ -10,7 +10,8 @@ export function BottomHand({
   animationEvents = [],
   submit,
   setTool,
-  setSelection
+  setSelection,
+  setOperationContext
 }: {
   state: GameState;
   viewerPlayerId?: string;
@@ -18,6 +19,7 @@ export function BottomHand({
   submit: (command: Command) => void;
   setTool: (tool: UiTool) => void;
   setSelection: Dispatch<SetStateAction<UiSelection | undefined>>;
+  setOperationContext?: Dispatch<SetStateAction<UiOperationContext | undefined>>;
 }) {
   const player = state.players.find((item) => item.id === viewerPlayerId) ?? state.players[0];
 
@@ -29,6 +31,7 @@ export function BottomHand({
         submit={submit}
         setTool={setTool}
         setSelection={setSelection}
+        setOperationContext={setOperationContext}
       />
     </section>
   );

@@ -98,7 +98,7 @@ describe("StartScreen", () => {
     expect(screen.getByRole("button", { name: "规则说明" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "设置" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "制作人员" })).toBeInTheDocument();
-    expect(screen.getByText("版本号： 1.0.0")).toBeInTheDocument();
+    expect(screen.getByText("版本号：1.0.0")).toBeInTheDocument();
   });
 
   it("scales the menu from the same fixed design surface on every viewport", () => {
@@ -346,9 +346,9 @@ describe("StartScreen", () => {
     openOnlineEntry();
 
     const hiddenRoomCodeInput = screen.getByLabelText("在线房间码");
-    const firstCodeInput = screen.getByLabelText("房间码第1位");
-    const secondCodeInput = screen.getByLabelText("房间码第2位");
-    const thirdCodeInput = screen.getByLabelText("房间码第3位");
+    const firstCodeInput = screen.getByLabelText("房间码第 1 位");
+    const secondCodeInput = screen.getByLabelText("房间码第 2 位");
+    const thirdCodeInput = screen.getByLabelText("房间码第 3 位");
 
     firstCodeInput.focus();
     fireEvent.change(firstCodeInput, { target: { value: "r" } });
@@ -366,8 +366,8 @@ describe("StartScreen", () => {
     renderStartScreen();
     openOnlineEntry();
 
-    const firstCodeInput = screen.getByLabelText("房间码第1位");
-    const fourthCodeInput = screen.getByLabelText("房间码第4位");
+    const firstCodeInput = screen.getByLabelText("房间码第 1 位");
+    const fourthCodeInput = screen.getByLabelText("房间码第 4 位");
 
     fourthCodeInput.focus();
 
@@ -461,7 +461,7 @@ describe("StartScreen", () => {
     const { container, onCreate } = renderStartScreen();
     openHotSeatSetup();
 
-    fireEvent.click(screen.getByRole("button", { name: "5人" }));
+    fireEvent.click(screen.getByRole("button", { name: "5 人" }));
     const factionSelects = container.querySelectorAll<HTMLSelectElement>(".start-faction-select-field select");
     expect(factionSelects).toHaveLength(5);
 

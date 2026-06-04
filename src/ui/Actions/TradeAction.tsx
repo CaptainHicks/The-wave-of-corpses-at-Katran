@@ -1,20 +1,31 @@
 import { ArrowRight, Minus, Plus } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { RESOURCE_LABELS, RESOURCES, createResources } from "../../domain/constants";
 import { isBlackMarketVisible, tileResource } from "../../domain/board";
 import { resourceTotal } from "../../domain/rules";
 import type { Command, GameState, Resource, Resources } from "../../domain/types";
 import { resourceIconAssets } from "../art/assetManifest";
-import { PUBLIC_TRADE_TARGET } from "../gameUiTypes";
+import { PUBLIC_TRADE_TARGET, type UiOperationContext } from "../gameUiTypes";
 import { AssetIcon } from "./AssetIcon";
 
-export function TradeAction({ state, submit }: { state: GameState; submit: (command: Command) => void }) {
+type TradeHintSource = "bank" | "player";
+
+export function TradeAction({
+  state,
+  submit,
+  setOperationContext
+}: {
+  state: GameState;
+  submit: (command: Command) => void;
+  setOperationContext?: Dispatch<SetStateAction<UiOperationContext | undefined>>;
+}) {
   const player = state.players.find((item) => item.id === state.currentPlayerId)!;
   const [tradeGive, setTradeGive] = useState<Resource | "">("");
   const [tradeReceive, setTradeReceive] = useState<Resource | "">("");
   const [tradeTarget, setTradeTarget] = useState(PUBLIC_TRADE_TARGET);
   const [playerOffer, setPlayerOffer] = useState<Resources>(() => createResources());
   const [playerRequest, setPlayerRequest] = useState<Resources>(() => createResources());
+  const [tradeHintSource, setTradeHintSource] = useState<TradeHintSource>();
   const bestRate = tradeGive ? bestTradeRate(state, tradeGive) : 4;
   const canBankTrade =
     tradeGive !== "" &&
@@ -22,16 +33,69 @@ export function TradeAction({ state, submit }: { state: GameState; submit: (comm
     tradeGive !== tradeReceive &&
     player.resources[tradeGive] >= bestRate;
   const canOffer = resourceTotal(playerOffer) > 0 && resourceTotal(playerRequest) > 0;
+  const offerTotal = resourceTotal(playerOffer);
+  const requestTotal = resourceTotal(playerRequest);
+  const hasBankTradeHint = tradeGive !== "" || tradeReceive !== "";
+  const hasPlayerTradeHint = tradeTarget !== PUBLIC_TRADE_TARGET || offerTotal > 0 || requestTotal > 0;
+  const activeTradeHintSource = tradeHintSource ?? (hasPlayerTradeHint ? "player" : hasBankTradeHint ? "bank" : undefined);
+
+  const showBankTradeContext = () => {
+    setOperationContext?.({
+      kind: "bankTrade",
+      give: tradeGive || undefined,
+      receive: tradeReceive || undefined,
+      rate: bestRate,
+      canTrade: canBankTrade
+    });
+  };
+
+  const showPlayerTradeContext = () => {
+    setOperationContext?.({
+      kind: "playerTrade",
+      target: tradeTarget === PUBLIC_TRADE_TARGET ? "public" : "direct",
+      offerTotal,
+      requestTotal
+    });
+  };
+
+  useEffect(() => {
+    if (activeTradeHintSource === "bank") {
+      showBankTradeContext();
+      return;
+    }
+    if (activeTradeHintSource === "player") {
+      showPlayerTradeContext();
+      return;
+    }
+    setOperationContext?.(undefined);
+  }, [
+    activeTradeHintSource,
+    bestRate,
+    canBankTrade,
+    offerTotal,
+    requestTotal,
+    setOperationContext,
+    tradeGive,
+    tradeReceive,
+    tradeTarget
+  ]);
 
   return (
     <section className="action-pane">
-      <div className="action-subsection">
+      <div className="trade-panel-box action-subsection">
         <h3>银行 / 黑市</h3>
         <div className="trade-row">
           <select
             aria-label="兑换支出资源"
             value={tradeGive}
-            onChange={(event) => setTradeGive(event.target.value as Resource | "")}
+            onChange={(event) => {
+              setTradeHintSource("bank");
+              setTradeGive(event.target.value as Resource | "");
+            }}
+            onFocus={() => {
+              setTradeHintSource("bank");
+              showBankTradeContext();
+            }}
           >
             <option value="">选择支出</option>
             {RESOURCES.map((resource) => (
@@ -44,7 +108,14 @@ export function TradeAction({ state, submit }: { state: GameState; submit: (comm
           <select
             aria-label="兑换获得资源"
             value={tradeReceive}
-            onChange={(event) => setTradeReceive(event.target.value as Resource | "")}
+            onChange={(event) => {
+              setTradeHintSource("bank");
+              setTradeReceive(event.target.value as Resource | "");
+            }}
+            onFocus={() => {
+              setTradeHintSource("bank");
+              showBankTradeContext();
+            }}
           >
             <option value="">选择获得</option>
             {RESOURCES.map((resource) => (
@@ -53,6 +124,8 @@ export function TradeAction({ state, submit }: { state: GameState; submit: (comm
               </option>
             ))}
           </select>
+        </div>
+        <div className="inline-actions trade-panel-actions">
           <button
             disabled={!canBankTrade}
             onClick={() => {
@@ -65,9 +138,19 @@ export function TradeAction({ state, submit }: { state: GameState; submit: (comm
         </div>
       </div>
 
-      <div className="player-trade-box">
+      <div className="trade-panel-box player-trade-box">
         <h3>玩家报价</h3>
-        <select value={tradeTarget} onChange={(event) => setTradeTarget(event.target.value)}>
+        <select
+          value={tradeTarget}
+          onFocus={() => {
+            setTradeHintSource("player");
+            showPlayerTradeContext();
+          }}
+          onChange={(event) => {
+            setTradeHintSource("player");
+            setTradeTarget(event.target.value);
+          }}
+        >
           <option value={PUBLIC_TRADE_TARGET}>向所有玩家公开报价</option>
           {state.players
             .filter((item) => item.id !== state.currentPlayerId)
@@ -78,8 +161,25 @@ export function TradeAction({ state, submit }: { state: GameState; submit: (comm
             ))}
         </select>
         <div className="trade-bundles">
-          <ResourceBundleEditor title="给出" resources={playerOffer} available={player.resources} onChange={setPlayerOffer} />
-          <ResourceBundleEditor title="换取" resources={playerRequest} onChange={setPlayerRequest} />
+          <ResourceBundleEditor
+            title="给出"
+            resources={playerOffer}
+            available={player.resources}
+            onFocus={() => {
+              setTradeHintSource("player");
+              showPlayerTradeContext();
+            }}
+            onChange={setPlayerOffer}
+          />
+          <ResourceBundleEditor
+            title="换取"
+            resources={playerRequest}
+            onFocus={() => {
+              setTradeHintSource("player");
+              showPlayerTradeContext();
+            }}
+            onChange={setPlayerRequest}
+          />
         </div>
         <div className="inline-actions">
           <button
@@ -103,6 +203,7 @@ export function TradeAction({ state, submit }: { state: GameState; submit: (comm
               setTradeTarget(PUBLIC_TRADE_TARGET);
               setPlayerOffer(createResources());
               setPlayerRequest(createResources());
+              setTradeHintSource(undefined);
             }}
           >
             清空
@@ -117,26 +218,32 @@ function ResourceBundleEditor({
   title,
   resources,
   available,
+  onFocus,
   onChange
 }: {
   title: string;
   resources: Resources;
   available?: Resources;
+  onFocus?: () => void;
   onChange: (resources: Resources) => void;
 }) {
   const adjust = (resource: Resource, delta: number) => {
     const nextAmount = Math.max(0, resources[resource] + delta);
     if (available && nextAmount > available[resource]) return;
+    onFocus?.();
     onChange({ ...resources, [resource]: nextAmount });
   };
 
   return (
-    <div className="resource-editor">
+    <div className="resource-editor" onFocus={onFocus}>
       <strong>{title}</strong>
       {RESOURCES.map((resource) => (
         <div key={resource} className="resource-stepper">
           {resourceIconAssets[resource].imageUrl && (
-            <AssetIcon src={resourceIconAssets[resource].imageUrl} className="resource-stepper-asset-icon" />
+            <AssetIcon
+              src={resourceIconAssets[resource].imageUrl}
+              className={`resource-stepper-asset-icon resource-stepper-asset-icon-${resource}`}
+            />
           )}
           <span>{RESOURCE_LABELS[resource]}</span>
           <button aria-label={`${RESOURCE_LABELS[resource]}减少`} disabled={resources[resource] <= 0} onClick={() => adjust(resource, -1)}>

@@ -1,18 +1,21 @@
 import { AlertTriangle } from "lucide-react";
+import type { Dispatch, SetStateAction } from "react";
 import type { Command, GameState } from "../../domain/types";
 import { AssetIcon } from "../Actions/AssetIcon";
-import type { UiTool } from "../gameUiTypes";
+import type { UiOperationContext, UiTool } from "../gameUiTypes";
 import { ResourcePickerModal } from "../Modals/ResourcePickerModal";
 import { TradeOfferModal } from "../Modals/TradeOfferModal";
 
 export function PendingPanel({
   state,
   submit,
-  setTool
+  setTool,
+  setOperationContext
 }: {
   state: GameState;
   submit: (command: Command) => void;
   setTool: (tool: UiTool) => void;
+  setOperationContext?: Dispatch<SetStateAction<UiOperationContext | undefined>>;
 }) {
   if (!state.pending) return null;
   const pending = state.pending;
@@ -32,7 +35,7 @@ export function PendingPanel({
       )}
       {state.pending.kind === "setupRoute" && (
         <div className="pending-task-card">
-          <p>{player?.name} 需要为刚放置的营地连接1条运输线。</p>
+          <p>{player?.name} 需要为刚放置的营地连接 1 条运输线。</p>
           <button onClick={() => setTool("initialRoute")}>
             <AssetIcon src="/assets/hud/transport.v1.webp" className="inline-action-asset-icon" />
             点击合法边
@@ -44,6 +47,8 @@ export function PendingPanel({
           title={`${player?.name} 选择资源`}
           subtitle={reasonText(state.pending.reason)}
           amount={state.pending.amount}
+          operationMode="choose"
+          setOperationContext={setOperationContext}
           onSubmit={(resources) => submit({ type: "chooseResource", resources })}
         />
       )}
@@ -53,6 +58,8 @@ export function PendingPanel({
           subtitle={`手牌超限，需要弃掉 ${state.pending.amount} 张；只显示响应玩家自己的资源。`}
           amount={state.pending.amount}
           available={player?.resources}
+          operationMode="discard"
+          setOperationContext={setOperationContext}
           onSubmit={(resources) => submit({ type: "discardResources", resources })}
         />
       )}
@@ -106,7 +113,7 @@ export function PendingPanel({
       )}
       {state.pending.kind === "downgradeFortress" && (
         <div className="pending-task-card alert">
-          <p>{player?.name} 选择1座堡垒降级。</p>
+          <p>{player?.name} 选择 1 座堡垒降级。</p>
           <p>请直接在地图上点击一座带白色轮廓的己方堡垒。</p>
         </div>
       )}

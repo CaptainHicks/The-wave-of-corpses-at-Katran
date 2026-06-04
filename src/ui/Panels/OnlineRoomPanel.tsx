@@ -1,14 +1,18 @@
 import { Ban, Copy, LogOut, Music, Play, RefreshCw, Volume2, VolumeX } from "lucide-react";
 import { useState, type CSSProperties } from "react";
+import type { GameState } from "../../domain/types";
 import { useAudioSettings } from "../audio/useAudio";
+import { SystemMenuInfoSection } from "./PersistencePanel";
 
 export function OnlineRoomPanel({
+  state,
   roomCode,
   connectionState,
   onClose,
   onReconnect,
   onLeaveRoom
 }: {
+  state: GameState;
   roomCode: string;
   connectionState: "disconnected" | "connecting" | "connected" | "reconnecting";
   onClose: () => void;
@@ -94,6 +98,8 @@ export function OnlineRoomPanel({
           </button>
         </div>
       </div>
+
+      <SystemMenuInfoSection state={state} modeLabel="在线联机" />
 
       <div className="online-pause-section online-pause-audio-section">
         <div className="online-pause-section-heading">

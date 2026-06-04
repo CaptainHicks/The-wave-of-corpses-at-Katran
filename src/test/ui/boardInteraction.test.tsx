@@ -428,6 +428,49 @@ describe("BoardView interaction targets", () => {
     expect(submit).toHaveBeenCalledWith({ type: "activateMilitia", militiaId });
   });
 
+  it("selects which militia to move on the map before choosing its destination", () => {
+    const state = setupActionState("move-militia-select-source");
+    const playerId = state.currentPlayerId;
+    const source = Object.values(state.board.vertices).find((vertex) => vertex.building?.ownerId === playerId)!;
+    const edgeId = source.edgeIds[0];
+    const edge = state.board.edges[edgeId];
+    const targetId = edge.vertexIds.find((vertexId) => vertexId !== source.id)!;
+    const militiaId = "p1-active-move-test";
+    state.board.edges[edgeId].route = { ownerId: playerId, type: "transport" };
+    state.board.vertices[targetId].building = { ownerId: playerId, type: "camp" };
+    state.players[0].militia.push({
+      id: militiaId,
+      ownerId: playerId,
+      vertexId: source.id,
+      status: "active",
+      activatedTurn: state.turn - 1
+    });
+
+    const selection: UiSelection = { kind: "moveMilitia" };
+    const { container, rerender, setSelection, submit, reportError } = renderBoard(state, "none", vi.fn(), selection);
+
+    fireEvent.click(container.querySelector(`[data-vertex-id="${source.id}"]`)!);
+
+    expect(setSelection).toHaveBeenCalledWith({ kind: "moveMilitia", militiaId });
+    expect(submit).not.toHaveBeenCalled();
+
+    rerender(
+      <BoardView
+        state={state}
+        tool="none"
+        selection={{ kind: "moveMilitia", militiaId }}
+        animationEvents={[]}
+        setSelection={setSelection}
+        reportError={reportError}
+        submit={submit}
+      />
+    );
+
+    fireEvent.click(container.querySelector(`[data-vertex-id="${targetId}"]`)!);
+
+    expect(submit).toHaveBeenCalledWith({ type: "moveMilitia", militiaId, toVertexId: targetId });
+  });
+
   it("only treats queued fortress downgrade vertices as legal map targets", () => {
     const state = setupActionState("downgrade-targets");
     const p1Buildings = Object.values(state.board.vertices).filter((vertex) => vertex.building?.ownerId === "p1");

@@ -1,5 +1,5 @@
 import type { GameAnimationInput } from "../animation/animationTypes";
-import { gameplayMusic, menuMusic, settlementMusic, soundEffects } from "./audioAssets";
+import { gameplayMusic, menuMusic, settlementMusic, soundEffects, type AudioAssetSource } from "./audioAssets";
 import type { AudioSettings } from "./audioSettings";
 import { loadAudioSettings, normalizeAudioSettings } from "./audioSettings";
 
@@ -77,6 +77,7 @@ class AudioController {
   private sfxLastPlayed = new Map<string, number>();
   private sfxElements = new Map<BufferedSfxKey, HTMLAudioElement[]>();
   private sfxElementIndex = new Map<BufferedSfxKey, number>();
+  private sfxSources = new Map<BufferedSfxKey, AudioAssetSource>();
   private sfxContext?: AudioContext;
   private sfxBuffers = new Map<BufferedSfxKey, AudioBuffer>();
   private sfxBufferLoads = new Map<BufferedSfxKey, Promise<void>>();
@@ -86,6 +87,7 @@ class AudioController {
     if (!this.enabled) return;
     this.music = getSharedMusicChannel();
     this.bindMusicEnded();
+    this.resolveSfxSources();
     this.prepareHtmlSfxElements();
   }
 
@@ -296,8 +298,10 @@ class AudioController {
 
   private prepareHtmlSfxElements(): void {
     (Object.keys(soundEffects) as BufferedSfxKey[]).forEach((key) => {
+      const source = this.sfxSources.get(key);
+      if (!source) return;
       const elements = Array.from({ length: HTML_SFX_POOL_SIZE }, () => {
-        const element = new Audio(soundEffects[key]);
+        const element = new Audio(source.src);
         element.preload = "none";
         return element;
       });
@@ -329,8 +333,10 @@ class AudioController {
     if (existing) return existing;
     const context = this.getSfxContext();
     if (!context) return Promise.resolve();
+    const source = this.sfxSources.get(key);
+    if (!source) return Promise.resolve();
 
-    const load = fetch(soundEffects[key])
+    const load = fetch(source.src)
       .then((response) => response.arrayBuffer())
       .then((data) => context.decodeAudioData(data))
       .then((buffer) => {
@@ -342,6 +348,15 @@ class AudioController {
       });
     this.sfxBufferLoads.set(key, load);
     return load;
+  }
+
+  private resolveSfxSources(): void {
+    const probe = new Audio();
+    (Object.keys(soundEffects) as BufferedSfxKey[]).forEach((key) => {
+      const sources = soundEffects[key];
+      const supported = sources.find((source) => probe.canPlayType(source.type) !== "");
+      this.sfxSources.set(key, supported ?? sources[0]);
+    });
   }
 }
 

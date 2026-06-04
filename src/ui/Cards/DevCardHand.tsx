@@ -8,7 +8,7 @@ import {
   type SetStateAction
 } from "react";
 import type { Command, DevCard as DevCardModel, DevCardType, GameState, PlayerState } from "../../domain/types";
-import type { UiSelection, UiTool } from "../gameUiTypes";
+import type { UiOperationContext, UiSelection, UiTool } from "../gameUiTypes";
 import { useCoarsePointer } from "../useCoarsePointer";
 import { DevCard } from "./DevCard";
 
@@ -56,13 +56,15 @@ export function DevCardHand({
   player,
   submit,
   setTool,
-  setSelection
+  setSelection,
+  setOperationContext
 }: {
   state: GameState;
   player: PlayerState;
   submit: (command: Command) => void;
   setTool: (tool: UiTool) => void;
   setSelection: Dispatch<SetStateAction<UiSelection | undefined>>;
+  setOperationContext?: Dispatch<SetStateAction<UiOperationContext | undefined>>;
 }) {
   const isCoarsePointer = useCoarsePointer();
   const [selectedCardId, setSelectedCardId] = useState<string>();
@@ -363,6 +365,19 @@ export function DevCardHand({
   const setSelected = (cardId: string | undefined) => {
     selectedCardIdRef.current = cardId;
     setSelectedCardId(cardId);
+    if (!cardId) {
+      setOperationContext?.((current) => (current?.kind === "devCardHand" ? undefined : current));
+      return;
+    }
+    const card = renderedCardsById.get(cardId);
+    if (!card) return;
+    const playability = getDevCardPlayability(state, player, card);
+    setOperationContext?.({
+      kind: "devCardHand",
+      cardType: card.type,
+      playable: playability.playable,
+      reason: playability.reason
+    });
   };
 
   const captureTouchCardZones = () => {
@@ -438,6 +453,11 @@ export function DevCardHand({
     if (card.type === "roadCrew") {
       setTool("transport");
       setSelection({ kind: "devRoadCrew", cardId: card.id, routeType: "transport", routes: [] });
+      return true;
+    }
+    if (card.type === "requisition") {
+      setTool("none");
+      setSelection({ kind: "devRequisition", cardId: card.id });
       return true;
     }
     submit({ type: "playDevelopmentCard", cardId: card.id });

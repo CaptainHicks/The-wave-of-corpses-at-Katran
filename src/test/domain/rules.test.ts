@@ -20,6 +20,7 @@ import {
   legalBuildEdges,
   legalInitialCampVertices,
   legalInitialRouteEdges,
+  legalExpelZombieMilitiaIds,
   legalRecruitVertices,
   longestSupplyLength
 } from "../../domain/rules";
@@ -513,6 +514,14 @@ describe("standard board", () => {
     });
   });
 
+  it("limits each initial large resource zone to one infected tile", () => {
+    Array.from({ length: 16 }, (_, index) => createStandardBoard(`initial-zone-infected-${index}`)).forEach((board) => {
+      clusterComponents(board, "large").forEach((component) => {
+        expect(component.filter((tileId) => board.tiles[tileId].hiddenType === "infected")).toHaveLength(1);
+      });
+    });
+  });
+
   it("keeps normal resources near the target distribution", () => {
     Array.from({ length: 8 }, (_, index) => createStandardBoard(`resource-ratio-${index}`)).forEach((board) => {
       const normalCount = Object.values(board.tiles).filter((tile) => NORMAL_RESOURCE_TYPES.includes(tile.hiddenType)).length;
@@ -864,7 +873,7 @@ describe("setup and production", () => {
     expect(legalRecruitVertices(state)).not.toContain(vertex.id);
     expect(() =>
       applyCommand(state, { type: "recruitMilitia", vertexId: vertex.id, free: true })
-    ).toThrow(/最多驻守2个民兵/);
+    ).toThrow(/最多驻守 2 个民兵/);
   });
 
   it("starts discard and zombie movement flow on seven", () => {
@@ -1019,7 +1028,7 @@ describe("free action phase", () => {
     expect(state.players[0].resources).toMatchObject({ wood: 0, metal: 0, fuel: 0 });
   });
 
-  it("allows recruiting and readying militia before trading", () => {
+  it("allows recruiting and activating militia before trading", () => {
     let state = actionGame();
     const vertex = legalRecruitVertices(state)[0];
     expect(vertex).toBeTruthy();
@@ -1029,7 +1038,29 @@ describe("free action phase", () => {
     state = applyCommand(state, { type: "activateMilitia", militiaId });
     state = applyCommand(state, { type: "bankTrade", give: "food", receive: "wood" });
 
-    expect(state.players[0].militia[0].status).toBe("readying");
+    expect(state.players[0].militia[0].status).toBe("active");
+    expect(state.players[0].militia[0].activatedTurn).toBe(state.turn);
+  });
+
+  it("prevents militia activated this turn from immediately expelling zombies", () => {
+    let state = actionGame();
+    const vertexId = legalRecruitVertices(state)[0];
+    expect(vertexId).toBeTruthy();
+
+    state = applyCommand(state, { type: "recruitMilitia", vertexId });
+    const militiaId = state.players[0].militia[0].id;
+    state = applyCommand(state, { type: "activateMilitia", militiaId });
+
+    const zombieTileId = state.board.vertices[vertexId].tileIds.find((tileId) => state.board.tiles[tileId].revealed);
+    const targetTileId = Object.values(state.board.tiles).find((tile) => tile.revealed && tile.id !== zombieTileId)?.id;
+    expect(zombieTileId).toBeTruthy();
+    expect(targetTileId).toBeTruthy();
+    state.zombieTileId = zombieTileId!;
+
+    expect(legalExpelZombieMilitiaIds(state)).not.toContain(militiaId);
+    expect(() => applyCommand(state, { type: "expelZombie", militiaId, toTileId: targetTileId! })).toThrow(
+      "本回合刚激活的民兵不能立刻执行主动行动。"
+    );
   });
 
   it("allows buying a development card before trading", () => {
@@ -1133,6 +1164,15 @@ describe("free action phase", () => {
         payload: { resource: "wood" }
       })
     ).toThrow();
+  });
+
+  it("requires requisition to specify the resource type", () => {
+    const state = actionGame();
+    state.players[0].devCards.push({ id: "req-card", type: "requisition", purchasedTurn: 0 });
+
+    expect(() => applyCommand(state, { type: "playDevelopmentCard", cardId: "req-card" })).toThrow(
+      "征用物资必须指定资源。"
+    );
   });
 });
 
@@ -1256,6 +1296,31 @@ describe("scoring and siege", () => {
 
     expect(state.zombieTrack).toBe(0);
     expect(state.pending?.kind).toBe("downgradeFortress");
+  });
+
+  it("counts militia activated this turn for siege defense", () => {
+    let state = setupGame();
+    const p1Fortress = Object.values(state.board.vertices).find((vertex) => vertex.building?.ownerId === "p1")!;
+    const p2Fortress = Object.values(state.board.vertices).find((vertex) => vertex.building?.ownerId === "p2")!;
+    p1Fortress.building!.type = "fortress";
+    p2Fortress.building!.type = "fortress";
+    state.players[0].resources = createResources({ food: 2 });
+    state.players[0].militia.push(
+      { id: "p1-new-active-1", ownerId: "p1", vertexId: p1Fortress.id, status: "inactive" },
+      { id: "p1-new-active-2", ownerId: "p1", vertexId: p1Fortress.id, status: "inactive" }
+    );
+    state.players[0].devCards.push({ id: "zombie-card", type: "zombieApproaches", purchasedTurn: 0 });
+    state.zombieTrack = 5;
+    state.phase = "action";
+
+    state = applyCommand(state, { type: "activateMilitia", militiaId: "p1-new-active-1" });
+    state = applyCommand(state, { type: "activateMilitia", militiaId: "p1-new-active-2" });
+    state = applyCommand(state, { type: "playDevelopmentCard", cardId: "zombie-card" });
+
+    expect(state.players[0].defenderTokens).toBe(1);
+    expect(state.pending?.kind).toBe("chooseResource");
+    expect(state.zombieTrack).toBe(0);
+    expect(state.players[0].militia.every((militia) => militia.status === "inactive")).toBe(true);
   });
 
   it("only makes fortress owners with the fewest active militia lose a fortress after failed siege", () => {

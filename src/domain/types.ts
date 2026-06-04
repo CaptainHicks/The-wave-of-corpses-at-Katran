@@ -102,6 +102,7 @@ export interface Militia {
   vertexId: string;
   status: MilitiaStatus;
   ownerId: string;
+  activatedTurn?: number;
 }
 
 export interface PlayerState {

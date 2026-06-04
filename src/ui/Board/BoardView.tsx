@@ -155,7 +155,9 @@ export function BoardView({
       : []
   );
   const legalMoveMilitiaVertexSet = new Set(
-    canInteract && selection?.kind === "moveMilitia" ? legalMilitiaMoveVertices(state, selection.militiaId) : []
+    canInteract && selection?.kind === "moveMilitia" && selection.militiaId
+      ? legalMilitiaMoveVertices(state, selection.militiaId)
+      : []
   );
   const legalExpelZombieTileSet = new Set(
     canInteract && selection?.kind === "expelZombie" ? legalExpelZombieTiles(state, selection.militiaId) : []
@@ -184,6 +186,17 @@ export function BoardView({
       ? actingPlayer.militia.filter((militia) => militia.status === "inactive").map((militia) => militia.vertexId)
       : []
   );
+  const selectableMoveMilitiaByVertex = new Map<string, string>();
+  if (canInteract && selection?.kind === "moveMilitia" && !selection.militiaId && actingPlayer) {
+    actingPlayer.militia
+      .filter((militia) => legalMilitiaMoveVertices(state, militia.id).length > 0)
+      .forEach((militia) => {
+        if (!selectableMoveMilitiaByVertex.has(militia.vertexId)) {
+          selectableMoveMilitiaByVertex.set(militia.vertexId, militia.id);
+        }
+      });
+  }
+  const selectableMoveMilitiaVertexSet = new Set(selectableMoveMilitiaByVertex.keys());
   const legalTileOutlineIds = [...new Set([...legalExpelZombieTileSet, ...legalMerchantTileSet])].filter(
     (tileId) => state.board.tiles[tileId]
   );
@@ -262,7 +275,7 @@ export function BoardView({
     if (!actingPlayer) return "当前还不能激活民兵。";
     const militiaAtVertex = actingPlayer.militia.filter((item) => item.vertexId === vertexId);
     if (militiaAtVertex.length === 0) return "这里没有可激活的己方民兵。";
-    if (!militiaAtVertex.some((item) => item.status === "inactive")) return "这里只有已激活或准备中的民兵。";
+    if (!militiaAtVertex.some((item) => item.status === "inactive")) return "这里只有已激活或不可再次激活的民兵。";
     if (!hasCost(COSTS.activateMilitia)) return "资源不足，无法激活民兵。";
     return "这里不能激活民兵。";
   };
@@ -365,7 +378,7 @@ export function BoardView({
     if (!actingPlayer) return "当前还不能激活民兵。";
     const militiaAtVertex = actingPlayer.militia.filter((item) => item.vertexId === vertexId);
     if (militiaAtVertex.length === 0) return "这里没有你的民兵，无法激活。";
-    if (!militiaAtVertex.some((item) => item.status === "inactive")) return "这里只有已激活或准备中的民兵。";
+    if (!militiaAtVertex.some((item) => item.status === "inactive")) return "这里只有已激活或不可再次激活的民兵。";
     if (!hasCost(COSTS.activateMilitia)) return "资源不够，无法激活民兵。";
     return "这里不能激活民兵。";
   };
@@ -470,6 +483,15 @@ export function BoardView({
   const clickVertex = (vertexId: string) => {
     if (!canInteract) return;
     if (selection?.kind === "moveMilitia") {
+      if (!selection.militiaId) {
+        const militiaId = selectableMoveMilitiaByVertex.get(vertexId);
+        if (!militiaId) {
+          reportError?.("先选择一个驻有可移动已激活民兵的己方营地或堡垒。");
+          return;
+        }
+        setSelection({ kind: "moveMilitia", militiaId });
+        return;
+      }
       if (!legalMoveMilitiaVertexSet.has(vertexId)) {
         reportError?.("民兵只能沿你的路线移动到可驻守且未满员的己方建筑。");
         return;
@@ -485,7 +507,7 @@ export function BoardView({
       const stationedCount = actingPlayer?.militia.filter((militia) => militia.vertexId === vertexId).length ?? 0;
       const selectedCount = selectedDevMilitiaVertexIds.filter((selectedVertexId) => selectedVertexId === vertexId).length;
       if (stationedCount + selectedCount >= 2) {
-        reportError?.("每处营地或堡垒最多驻守2个民兵。");
+        reportError?.("每处营地或堡垒最多驻守 2 个民兵。");
         return;
       }
       const vertexIds = [...selection.vertexIds, vertexId];
@@ -660,6 +682,7 @@ export function BoardView({
           (canUseNormalBoardTools && tool === "watchtower" && legalWatchtowerVertexSet.has(vertex.id)) ||
           (canUseNormalBoardTools && tool === "recruit" && legalRecruitVertexSet.has(vertex.id)) ||
           legalActivateMilitiaVertexSet.has(vertex.id) ||
+          selectableMoveMilitiaVertexSet.has(vertex.id) ||
           legalMoveMilitiaVertexSet.has(vertex.id) ||
           legalDevMilitiaVertexSet.has(vertex.id) ||
           legalDowngradeFortressVertexSet.has(vertex.id);

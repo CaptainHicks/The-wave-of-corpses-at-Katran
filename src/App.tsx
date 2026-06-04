@@ -11,7 +11,8 @@ import { useAudioUnlock, useInteractiveAudioFeedback, useMusicMode } from "./ui/
 import { isCriticalGameArtPreloadComplete, preloadCriticalGameArtAssets } from "./ui/art/preloadGameAssets";
 import { GameShell } from "./ui/GameShell";
 import { StartScreen } from "./ui/StartScreen";
-import type { UiSelection, UiTool } from "./ui/gameUiTypes";
+import type { UiOperationContext, UiSelection, UiTool } from "./ui/gameUiTypes";
+import { getOperationHint } from "./ui/operationHints";
 
 interface AppModel {
   state?: GameState;
@@ -59,6 +60,7 @@ function App() {
   const { events: animationEvents, pushEvents, isAnimating } = useGameAnimations();
   const [tool, setTool] = useState<UiTool>("none");
   const [selection, setSelection] = useState<UiSelection>();
+  const [operationContext, setOperationContext] = useState<UiOperationContext>();
   const [privacy, setPrivacy] = useState(false);
   const [lastSeatPlayerId, setLastSeatPlayerId] = useState<string | undefined>();
   const ruleHintTimerRef = useRef<number>();
@@ -224,10 +226,26 @@ function App() {
 
   const submitLocal = (command: Command) => {
     clearRuleHint();
-    previousStateRef.current = localState;
-    lastCommandRef.current = command;
-    dispatch({ type: "command", command });
-    setSelection(undefined);
+    try {
+      const nextState = applyCommand(localState, command);
+      previousStateRef.current = localState;
+      lastCommandRef.current = command;
+      dispatch({ type: "import", state: nextState });
+      dispatch({ type: "error", message: undefined });
+      setSelection(undefined);
+      setOperationContext(undefined);
+    } catch (error) {
+      previousStateRef.current = undefined;
+      lastCommandRef.current = undefined;
+      setSelection(undefined);
+      setOperationContext(undefined);
+      if (error instanceof RuleError) {
+        showRuleHint(error.message);
+        dispatch({ type: "error", message: undefined });
+        return;
+      }
+      dispatch({ type: "error", message: error instanceof Error ? error.message : "\u53d1\u751f\u672a\u77e5\u9519\u8bef\u3002" });
+    }
   };
 
   const submitOnline = (command: Command) => {
@@ -235,6 +253,7 @@ function App() {
     clearRuleHint();
     dispatch({ type: "error", message: undefined });
     setSelection(undefined);
+    setOperationContext(undefined);
     void onlineSession.sendCommand({
       roomCode: onlineSession.gameView.roomMeta.roomCode,
       command
@@ -247,6 +266,7 @@ function App() {
     setSavedGame(loadGame());
     setPrivacy(false);
     setLastSeatPlayerId(undefined);
+    setOperationContext(undefined);
   };
 
   const continueSavedGame = () => {
@@ -255,6 +275,7 @@ function App() {
     const nextSeatPlayerId = savedGame.pending?.playerId ?? savedGame.currentPlayerId;
     onlineSession.leaveRoom();
     dispatch({ type: "import", state: savedGame });
+    setOperationContext(undefined);
     setLastSeatPlayerId(nextSeatPlayerId);
     setPrivacy(
       Boolean(
@@ -301,6 +322,7 @@ function App() {
             onlineSession.leaveRoom();
             setTool("none");
             setSelection(undefined);
+            setOperationContext(undefined);
           },
           onDismissError: onlineSession.dismissError
         }}
@@ -315,6 +337,7 @@ function App() {
   const pendingPlayerId = localState?.pending?.playerId ?? onlineSession.gameView?.publicState.pending?.playerId;
   const currentPlayer = activeState.players.find((player) => player.id === activeState.currentPlayerId)!;
   const seatPlayer = activeState.players.find((player) => player.id === viewerPlayerId) ?? currentPlayer;
+  const operationHint = getOperationHint(activeState, tool, selection, operationContext);
   const clearHandler = localState
     ? clearToMenu
     : () => {
@@ -322,6 +345,7 @@ function App() {
         onlineSession.leaveRoom();
         setTool("none");
         setSelection(undefined);
+        setOperationContext(undefined);
       };
   if (!canShowGameBoard) {
     return <GameArtLoadingScreen />;
@@ -344,6 +368,7 @@ function App() {
       animationEvents={animationEvents}
       animationBusy={isAnimating}
       ruleHint={ruleHint?.message}
+      operationHint={operationHint}
       onClosePrivacy={() => setPrivacy(false)}
       onDismissError={() => {
         dispatch({ type: "error", message: undefined });
@@ -359,10 +384,12 @@ function App() {
         onlineSession.leaveRoom();
         setTool("none");
         setSelection(undefined);
+        setOperationContext(undefined);
       }}
       submit={localState ? submitLocal : submitOnline}
       setTool={setTool}
       setSelection={setSelection}
+      setOperationContext={setOperationContext}
     />
   );
 }

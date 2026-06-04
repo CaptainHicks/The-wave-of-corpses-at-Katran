@@ -1,5 +1,5 @@
 import { Check, Plus } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { RESOURCE_LABELS, RESOURCES, createResources } from "../../domain/constants";
 import { resourceTotal } from "../../domain/rules";
 import type { Resources } from "../../domain/types";
@@ -8,15 +8,21 @@ export function ResourcePicker({
   amount,
   label,
   available,
+  onSelectionChange,
   onSubmit
 }: {
   amount: number;
   label: string;
   available?: Resources;
+  onSelectionChange?: (selected: number) => void;
   onSubmit: (resources: Partial<Resources>) => void;
 }) {
   const [resources, setResources] = useState<Resources>(createResources());
   const total = resourceTotal(resources);
+  useEffect(() => {
+    onSelectionChange?.(total);
+  }, [onSelectionChange, total]);
+
   return (
     <div className="resource-picker">
       <p>{label}</p>

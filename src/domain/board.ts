@@ -292,18 +292,12 @@ function buildTileTypes(
   const revealedInfectedCandidates = infectedCandidates.filter((cell) => cellIsRevealed(roles, structure, cell.row, cell.col));
   if (revealedInfectedCandidates.length === 0) return undefined;
 
-  const [revealedInfectedCells, revealedRng] = shuffle(revealedInfectedCandidates, nextRng);
-  nextRng = revealedRng;
-  const infectedCells: BoardCell[] = [revealedInfectedCells[0]];
-  const infectedKeys = new Set(infectedCells.map(cellKey));
-  const [remainingInfectedCandidates, infectedRng] = shuffle(
-    infectedCandidates.filter((cell) => !infectedKeys.has(cellKey(cell))),
-    nextRng
-  );
+  const infectedSelection = pickInfectedCells(roles, infectedCandidates, revealedInfectedCandidates, nextRng);
+  if (!infectedSelection) return undefined;
+  const [infectedCells, infectedRng] = infectedSelection;
   nextRng = infectedRng;
-  infectedCells.push(...remainingInfectedCandidates.slice(0, INFECTED_COUNT - 1));
+  const infectedKeys = new Set(infectedCells.map(cellKey));
   if (infectedCells.length !== INFECTED_COUNT) return undefined;
-  infectedCells.forEach((cell) => infectedKeys.add(cellKey(cell)));
 
   const normalCells = cells.filter((cell) => !warehouseKeys.has(cellKey(cell)) && !infectedKeys.has(cellKey(cell)));
   const normalAssignments = assignNormalResourceTypes(roles, normalCells, nextRng);
@@ -324,6 +318,55 @@ function buildTileTypes(
   });
 
   return [tileTypes, nextRng];
+}
+
+function pickInfectedCells(
+  roles: BoardCluster[][],
+  infectedCandidates: BoardCell[],
+  revealedInfectedCandidates: BoardCell[],
+  rng: RngState
+): [BoardCell[], RngState] | undefined {
+  let nextRng = rng;
+  const initialComponents = initialResourceCellComponents(roles);
+
+  if (initialComponents.length > 0) {
+    if (initialComponents.length > INFECTED_COUNT) return undefined;
+
+    const initialCellKeys = new Set(initialComponents.flat().map(cellKey));
+    const infectedCells: BoardCell[] = [];
+
+    for (const component of initialComponents) {
+      const componentKeys = new Set(component.map(cellKey));
+      const componentCandidates = revealedInfectedCandidates.filter((cell) => componentKeys.has(cellKey(cell)));
+      if (componentCandidates.length === 0) return undefined;
+      const [shuffledComponentCandidates, componentRng] = shuffle(componentCandidates, nextRng);
+      nextRng = componentRng;
+      infectedCells.push(shuffledComponentCandidates[0]);
+    }
+
+    const chosenKeys = new Set(infectedCells.map(cellKey));
+    const remainingCandidates = infectedCandidates.filter(
+      (cell) => !chosenKeys.has(cellKey(cell)) && !initialCellKeys.has(cellKey(cell))
+    );
+    const [shuffledRemainingCandidates, remainingRng] = shuffle(remainingCandidates, nextRng);
+    nextRng = remainingRng;
+    infectedCells.push(...shuffledRemainingCandidates.slice(0, INFECTED_COUNT - infectedCells.length));
+
+    return infectedCells.length === INFECTED_COUNT ? [infectedCells, nextRng] : undefined;
+  }
+
+  const [revealedInfectedCells, revealedRng] = shuffle(revealedInfectedCandidates, nextRng);
+  nextRng = revealedRng;
+  const infectedCells: BoardCell[] = [revealedInfectedCells[0]];
+  const infectedKeys = new Set(infectedCells.map(cellKey));
+  const [remainingInfectedCandidates, infectedRng] = shuffle(
+    infectedCandidates.filter((cell) => !infectedKeys.has(cellKey(cell))),
+    nextRng
+  );
+  nextRng = infectedRng;
+  infectedCells.push(...remainingInfectedCandidates.slice(0, INFECTED_COUNT - 1));
+
+  return infectedCells.length === INFECTED_COUNT ? [infectedCells, nextRng] : undefined;
 }
 
 function assignNormalResourceTypes(
@@ -1179,6 +1222,11 @@ function validateInitialResourceMix(board: BoardState): string[] {
         errors.push(`Initial resource zone ${index + 1} should have at least 2 ${type} tiles, got ${countsByType[type]}.`);
       }
     });
+
+    const infectedCount = component.filter((tileIdValue) => board.tiles[tileIdValue].hiddenType === "infected").length;
+    if (infectedCount !== 1) {
+      errors.push(`Initial resource zone ${index + 1} should have exactly 1 infected tile, got ${infectedCount}.`);
+    }
   });
 
   return errors;

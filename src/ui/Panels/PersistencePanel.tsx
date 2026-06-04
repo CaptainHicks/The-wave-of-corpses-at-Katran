@@ -40,7 +40,6 @@ export function PersistencePanel({
   const debugEnabled = Boolean(state.debugMode);
   const fogEnabled = state.fogEnabled !== false;
   const { settings, updateSettings } = useAudioSettings();
-  const [showRules, setShowRules] = useState(false);
   const isMuted = settings.muted || (settings.musicVolume === 0 && settings.sfxVolume === 0);
 
   const restartGame = () => {
@@ -146,26 +145,7 @@ export function PersistencePanel({
         </div>
       </div>
 
-      <div className="system-menu-section system-menu-info-section">
-        <SystemSectionHeading icon={BookOpen} title="规则与本局信息" note="" />
-        <div className="system-menu-info-grid">
-          <button type="button" className="system-menu-rules-button" onClick={() => setShowRules(true)}>
-            <BookOpen size={40} />
-            <span>
-              <strong>查看规则说明</strong>
-              <small>查看完整游戏规则</small>
-            </span>
-          </button>
-          <div className="system-menu-match-info" aria-label="本局信息">
-            <span className="system-menu-match-info-title">本局信息</span>
-            <SystemInfoItem icon={Box} label="当前模式" value="本地热座" />
-            <SystemInfoItem icon={Users} label="玩家人数" value={`${state.players.length} 人`} />
-            <SystemInfoItem icon={Eye} label="迷雾探索" value={fogEnabled ? "开启" : "关闭"} />
-            <SystemInfoItem icon={Bug} label="调试模式" value={debugEnabled ? "开启" : "关闭"} />
-            <SystemInfoItem icon={Star} label="胜利条件" value={`${VICTORY_POINTS_TO_WIN}分`} />
-          </div>
-        </div>
-      </div>
+      <SystemMenuInfoSection state={state} modeLabel="本地热座" />
 
       <div className={debugEnabled ? "system-menu-section system-menu-debug-section enabled" : "system-menu-section system-menu-debug-section"}>
         <SystemSectionHeading
@@ -213,8 +193,37 @@ export function PersistencePanel({
         <span>可随时打开或关闭系统菜单</span>
       </p>
 
-      {showRules ? <SystemRulesDialog onClose={() => setShowRules(false)} /> : null}
     </section>
+  );
+}
+
+export function SystemMenuInfoSection({ state, modeLabel }: { state: GameState; modeLabel: string }) {
+  const [showRules, setShowRules] = useState(false);
+  const debugEnabled = Boolean(state.debugMode);
+  const fogEnabled = state.fogEnabled !== false;
+
+  return (
+    <div className="system-menu-section system-menu-info-section">
+      <SystemSectionHeading icon={BookOpen} title="规则与本局信息" note="" />
+      <div className="system-menu-info-grid">
+        <button type="button" className="system-menu-rules-button" onClick={() => setShowRules(true)}>
+          <BookOpen size={40} />
+          <span>
+            <strong>查看规则说明</strong>
+            <small>查看完整游戏规则</small>
+          </span>
+        </button>
+        <div className="system-menu-match-info" aria-label="本局信息">
+          <span className="system-menu-match-info-title">本局信息</span>
+          <SystemInfoItem icon={Box} label="当前模式" value={modeLabel} />
+          <SystemInfoItem icon={Users} label="玩家人数" value={`${state.players.length} 人`} />
+          <SystemInfoItem icon={Eye} label="迷雾探索" value={fogEnabled ? "开启" : "关闭"} />
+          <SystemInfoItem icon={Bug} label="调试模式" value={debugEnabled ? "开启" : "关闭"} />
+          <SystemInfoItem icon={Star} label="胜利条件" value={`${VICTORY_POINTS_TO_WIN}分`} />
+        </div>
+      </div>
+      {showRules ? <SystemRulesDialog onClose={() => setShowRules(false)} /> : null}
+    </div>
   );
 }
 
@@ -344,7 +353,7 @@ function SystemRulesDialog({ onClose }: { onClose: () => void }) {
           </article>
           <article>
             <strong>新资源区奖励</strong>
-            <p>每名玩家首次在非起始资源区的新资源区建立营地时，额外获得 1 点胜利点；同一玩家在每个新资源区最多获得一次该奖励。</p>
+            <p>每名玩家首次在非起始的新资源区建立营地时，额外获得 1 点胜利点；同一玩家在每个新资源区最多获得一次该奖励。</p>
           </article>
           <article>
             <strong>尸潮规则</strong>

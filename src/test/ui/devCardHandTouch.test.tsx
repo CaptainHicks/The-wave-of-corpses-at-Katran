@@ -211,6 +211,31 @@ describe("DevCardHand touch interactions", () => {
     expect(submit).toHaveBeenCalledWith({ type: "playDevelopmentCard", cardId: "dev-1" });
   });
 
+  it("opens a resource choice before playing requisition", () => {
+    const player = createPlayer([{ id: "req-1", type: "requisition", purchasedTurn: 1 }]);
+    const submit = vi.fn();
+    const setSelection = vi.fn();
+    const { container } = render(
+      <DevCardHand
+        state={createState(player)}
+        player={player}
+        submit={submit}
+        setTool={vi.fn()}
+        setSelection={setSelection}
+      />
+    );
+
+    const card = container.querySelector(".dev-hand-card") as HTMLElement;
+    elementFromPointMock.mockReturnValue(card);
+
+    firePointer(card, "pointerdown", { pointerId: 1, pointerType: "touch", clientX: 50, clientY: 300 });
+    firePointer(window, "pointermove", { pointerId: 1, pointerType: "touch", clientX: 50, clientY: 205 });
+    firePointer(window, "pointerup", { pointerId: 1, pointerType: "touch", clientX: 50, clientY: 205 });
+
+    expect(submit).not.toHaveBeenCalled();
+    expect(setSelection).toHaveBeenCalledWith({ kind: "devRequisition", cardId: "req-1" });
+  });
+
   it("uses the pull-out threshold for touch even on devices that also report a fine pointer", () => {
     mockCoarsePointer(false);
     const player = createPlayer();
