@@ -198,6 +198,7 @@ export function RightOperationDock({
             <MilitiaAction
               key={panelRefreshKey}
               state={state}
+              tool={tool}
               submit={submit}
               setTool={setTool}
               setSelection={setSelection}

@@ -1,4 +1,4 @@
-import type { MouseEvent } from "react";
+import type { CSSProperties, MouseEvent } from "react";
 import type { BuildingType, Militia, PlayerState, VertexState } from "../../domain/types";
 import { boardMarkerAssets, getBuildingPieceAsset } from "../art/assetManifest";
 
@@ -38,7 +38,7 @@ export function VertexToken({
 }) {
   const ownedMilitia = buildingOwner ? militia.filter((item) => item.ownerId === buildingOwner.id) : [];
   const militiaCount = Math.min(2, ownedMilitia.length);
-  const lightningMilitia = ownedMilitia.slice(0, 2);
+  const visibleMilitiaMarkers = ownedMilitia.slice(0, 2);
   const hasOwnerWatchtower = Boolean(buildingOwner && vertex.watchtowerOwnerId === buildingOwner.id);
   const buildingAsset =
     vertex.building && buildingOwner
@@ -68,12 +68,17 @@ export function VertexToken({
   const hasPreviewBuilding = Boolean(previewBuildingAsset && previewPieceBox);
   const hasExpandedHitArea = Boolean(expandedHitArea && !vertex.building && !hasPreviewBuilding);
   const hasLegalBuildingTarget = Boolean(vertex.building && buildingAsset && pieceBox && legal);
+  const buildingPieceStyle = buildingOwner
+    ? ({ "--piece-color": buildingOwner.color } as CSSProperties)
+    : undefined;
+  const previewBuildingPieceStyle = previewBuildingOwner
+    ? ({ "--piece-color": previewBuildingOwner.color } as CSSProperties)
+    : undefined;
   const targetHitRadius = coarsePointer ? 20 : 18;
   const touchCueRadius = 13;
   const emptyHitRadius = coarsePointer ? 6 : 5;
-  const lightningHeight = pieceBox ? Math.max(12, Math.min(17, pieceBox.height * 0.36)) : 0;
-  const lightningWidth = lightningHeight * (112 / 192);
-  const lightningTop = pieceBox ? vertex.y - pieceBox.height * 0.62 - lightningHeight * 0.48 : vertex.y;
+  const militiaMarkerSize = pieceBox ? Math.max(16, Math.min(22, pieceBox.height * 0.5)) : 0;
+  const militiaMarkerTop = pieceBox ? vertex.y - pieceBox.height * 0.62 - militiaMarkerSize * 0.58 : vertex.y;
 
   return (
     <g
@@ -104,6 +109,7 @@ export function VertexToken({
           height={previewPieceBox.height}
           preserveAspectRatio="xMidYMid meet"
           className={`building-piece building-piece-${previewBuildingType} building-piece-preview`}
+          style={previewBuildingPieceStyle}
           aria-hidden="true"
         />
       )}
@@ -118,6 +124,7 @@ export function VertexToken({
               height={pieceBox.height}
               preserveAspectRatio="xMidYMid meet"
               className="building-piece-legal-outline"
+              style={buildingPieceStyle}
               aria-hidden="true"
             />
           )}
@@ -131,6 +138,7 @@ export function VertexToken({
             className={`building-piece building-piece-${vertex.building.type} ${
               legal ? "legal-building-target" : ""
             }`}
+            style={buildingPieceStyle}
             aria-hidden="true"
           />
         </>
@@ -156,25 +164,26 @@ export function VertexToken({
       )}
       {vertex.building &&
         pieceBox &&
-        lightningMilitia.map((item, index) => {
+        visibleMilitiaMarkers.map((item, index) => {
           const isActivated = item.status !== "inactive";
-          const xOffset = lightningMilitia.length === 1 ? 0 : index === 0 ? -5 : 5;
+          const xOffset = visibleMilitiaMarkers.length === 1 ? 0 : index === 0 ? -7 : 7;
           return (
             <image
-              key={`lightning-${item.id}`}
-              href={boardMarkerAssets.militiaLightning[isActivated ? "active" : "inactive"]}
-              x={vertex.x + xOffset - lightningWidth / 2}
-              y={lightningTop}
-              width={lightningWidth}
-              height={lightningHeight}
+              key={`militia-marker-${item.id}`}
+              href={boardMarkerAssets.militiaCountMarkers[isActivated ? "active" : "inactive"]}
+              x={vertex.x + xOffset - militiaMarkerSize / 2}
+              y={militiaMarkerTop}
+              width={militiaMarkerSize}
+              height={militiaMarkerSize}
               preserveAspectRatio="xMidYMid meet"
-              className={`militia-lightning-token ${isActivated ? "is-active" : "is-inactive"}`}
+              className={`militia-count-token ${isActivated ? "is-active" : "is-inactive"}`}
               aria-hidden="true"
             />
           );
         })}
       {(!buildingAsset ? militia : militia.filter((item) => item.ownerId !== buildingOwner?.id)).map((item, index) => {
         const owner = players.find((player) => player.id === item.ownerId);
+        const militiaStyle = owner ? ({ "--piece-color": owner.color, color: owner.color } as CSSProperties) : undefined;
         const offsets = [
           { x: -13, y: 13 },
           { x: 13, y: 13 }
@@ -185,6 +194,7 @@ export function VertexToken({
             key={item.id}
             className={`militia-marker militia-${item.status}`}
             transform={`translate(${vertex.x + offset.x} ${vertex.y + offset.y})`}
+            style={militiaStyle}
           >
             <circle r="7" style={{ stroke: owner?.color }} />
             <text y="3">{item.status === "active" ? "活" : item.status === "readying" ? "待" : "伏"}</text>

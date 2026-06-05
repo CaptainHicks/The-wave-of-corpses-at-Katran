@@ -1,6 +1,6 @@
-import type { Dispatch, SetStateAction } from "react";
+import { useEffect, type Dispatch, type SetStateAction } from "react";
 import { COSTS, RESOURCE_LABELS, RESOURCES } from "../../domain/constants";
-import { legalExpelZombieMilitiaIds, legalMilitiaMoveVertices } from "../../domain/rules";
+import { hasResources, legalExpelZombieMilitiaIds, legalMilitiaMoveVertices } from "../../domain/rules";
 import type { Command, GameState, Resources } from "../../domain/types";
 import type { UiSelection, UiTool } from "../gameUiTypes";
 import { AssetIcon } from "./AssetIcon";
@@ -20,11 +20,13 @@ const COPY = {
 
 export function MilitiaAction({
   state,
+  tool,
   submit,
   setTool,
   setSelection
 }: {
   state: GameState;
+  tool: UiTool;
   submit: (command: Command) => void;
   setTool: (tool: UiTool) => void;
   setSelection: Dispatch<SetStateAction<UiSelection | undefined>>;
@@ -32,15 +34,34 @@ export function MilitiaAction({
   const player = state.players.find((item) => item.id === state.currentPlayerId)!;
   const inactive = player.militia.filter((militia) => militia.status === "inactive");
   const active = player.militia.filter((militia) => militia.status === "active");
+  const canAffordRecruit = hasResources(player.resources, COSTS.militia);
+  const canAffordActivate = hasResources(player.resources, COSTS.activateMilitia);
+  const canActivateMilitia = inactive.length > 0 && canAffordActivate;
   const expelMilitiaIds = legalExpelZombieMilitiaIds(state);
   const canMoveMilitia = active.some((militia) => legalMilitiaMoveVertices(state, militia.id).length > 0);
   const expelMilitiaId = expelMilitiaIds[0];
+
+  useEffect(() => {
+    if (tool === "recruit" && canAffordRecruit) return;
+    if (tool === "activateMilitia" && canActivateMilitia) return;
+    if (tool !== "recruit" && tool !== "activateMilitia") return;
+    setTool("none");
+    setSelection(undefined);
+  }, [canActivateMilitia, canAffordRecruit, setSelection, setTool, tool]);
 
   return (
     <section className="action-pane">
       <div className="action-subsection">
         <h3>{COPY.recruitTitle}</h3>
-        <button className="tool-card militia-option-card" onClick={() => setTool("recruit")}>
+        <button
+          className={`${tool === "recruit" && canAffordRecruit ? "selected " : ""}${canAffordRecruit ? "affordable " : ""}tool-card militia-option-card`}
+          disabled={!canAffordRecruit}
+          onClick={() => {
+            if (!canAffordRecruit) return;
+            setSelection(undefined);
+            setTool("recruit");
+          }}
+        >
           <AssetIcon src="/assets/hud/militia.v1.webp" className="tool-card-asset-icon militia-option-asset-icon" />
           <span>{COPY.recruitButton}</span>
           <small>{formatCost(COSTS.militia)}</small>
@@ -51,9 +72,10 @@ export function MilitiaAction({
       <div className="action-subsection">
         <div className="button-grid militia-activation-block">
           <button
-            className="tool-card militia-activate-card militia-option-card"
-            disabled={inactive.length === 0}
+            className={`${tool === "activateMilitia" && canActivateMilitia ? "selected " : ""}${canActivateMilitia ? "affordable " : ""}tool-card militia-activate-card militia-option-card`}
+            disabled={!canActivateMilitia}
             onClick={() => {
+              if (!canActivateMilitia) return;
               setSelection(undefined);
               setTool("activateMilitia");
             }}

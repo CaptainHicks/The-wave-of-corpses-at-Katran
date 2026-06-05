@@ -11,6 +11,7 @@ import type {
   RoomJoinRequest,
   RoomLeaveRequest,
   RoomResumeRequest,
+  RoomReturnToLobbyRequest,
   RoomStartRequest
 } from "../src/online/protocol";
 import { buildLobbyView, buildOnlineGameViews } from "../src/online/protocol";
@@ -235,6 +236,27 @@ io.on("connection", (socket) => {
         roomCode: payload.roomCode,
         viewerPlayerId: session.playerId,
         command: payload.command
+      });
+      await emitRoomViews(room);
+      ack?.({
+        ok: true,
+        roomCode: room.roomCode,
+        viewerPlayerId: session.playerId
+      });
+    } catch (error) {
+      ack?.(toAckError(error));
+    }
+  });
+
+  socket.on("room:returnToLobby", async (payload: RoomReturnToLobbyRequest, ack?: (result: OnlineEventAck) => void) => {
+    try {
+      const session = socketSessions.get(socket.id);
+      if (!session || session.roomCode !== payload.roomCode) {
+        throw new OnlineRoomError("请先加入或恢复房间，再返回大厅。");
+      }
+      const room = await roomService.returnToLobby({
+        roomCode: payload.roomCode,
+        viewerPlayerId: session.playerId
       });
       await emitRoomViews(room);
       ack?.({

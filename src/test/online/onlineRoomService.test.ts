@@ -209,6 +209,203 @@ describe("OnlineRoomService", () => {
     expect(room?.seats.map((seat) => seat.name)).toEqual(["Host", "Replacement"]);
   });
 
+  it("lets a disconnected lobby player rejoin a full room by name", async () => {
+    const service = await createService();
+    const host = await service.createRoom({
+      name: "Host",
+      targetPlayerCount: 2,
+      fogEnabled: true
+    });
+    const guest = await service.joinRoom({
+      roomCode: host.room.roomCode,
+      name: "Guest"
+    });
+    await service.chooseFaction({
+      roomCode: host.room.roomCode,
+      playerId: guest.seat.playerId,
+      factionId: "blue-steel"
+    });
+
+    await service.markDisconnected({
+      roomCode: host.room.roomCode,
+      playerId: guest.seat.playerId
+    });
+    const rejoined = await service.joinRoom({
+      roomCode: host.room.roomCode,
+      name: " Guest "
+    });
+
+    expect(rejoined.seat.playerId).toBe(guest.seat.playerId);
+    expect(rejoined.seat.factionId).toBe("blue-steel");
+    expect(rejoined.seat.connected).toBe(true);
+    expect(rejoined.seat.sessionToken).not.toBe(guest.seat.sessionToken);
+    expect(rejoined.room.seats.map((seat) => seat.name)).toEqual(["Host", "Guest"]);
+  });
+
+  it("lets a disconnected active-game player rejoin their original seat by name", async () => {
+    const service = await createService();
+    const host = await service.createRoom({
+      name: "Host",
+      targetPlayerCount: 2,
+      fogEnabled: false
+    });
+    const guest = await service.joinRoom({
+      roomCode: host.room.roomCode,
+      name: "Guest"
+    });
+    await service.chooseFaction({
+      roomCode: host.room.roomCode,
+      playerId: host.seat.playerId,
+      factionId: "red-rust"
+    });
+    await service.chooseFaction({
+      roomCode: host.room.roomCode,
+      playerId: guest.seat.playerId,
+      factionId: "blue-steel"
+    });
+    await service.startRoom({
+      roomCode: host.room.roomCode,
+      viewerPlayerId: host.seat.playerId
+    });
+
+    await service.markDisconnected({
+      roomCode: host.room.roomCode,
+      playerId: guest.seat.playerId
+    });
+    const rejoined = await service.joinRoom({
+      roomCode: host.room.roomCode,
+      name: "guest"
+    });
+
+    expect(rejoined.room.status).toBe("active");
+    expect(rejoined.seat.playerId).toBe(guest.seat.playerId);
+    expect(rejoined.seat.connected).toBe(true);
+    expect(rejoined.room.gameState?.players.map((player) => player.id)).toEqual(["p1", "p2"]);
+  });
+
+  it("still refuses new players once the room is already active", async () => {
+    const service = await createService();
+    const host = await service.createRoom({
+      name: "Host",
+      targetPlayerCount: 2,
+      fogEnabled: false
+    });
+    const guest = await service.joinRoom({
+      roomCode: host.room.roomCode,
+      name: "Guest"
+    });
+    await service.chooseFaction({
+      roomCode: host.room.roomCode,
+      playerId: host.seat.playerId,
+      factionId: "red-rust"
+    });
+    await service.chooseFaction({
+      roomCode: host.room.roomCode,
+      playerId: guest.seat.playerId,
+      factionId: "blue-steel"
+    });
+    await service.startRoom({
+      roomCode: host.room.roomCode,
+      viewerPlayerId: host.seat.playerId
+    });
+
+    await expect(
+      service.joinRoom({
+        roomCode: host.room.roomCode,
+        name: "Replacement"
+      })
+    ).rejects.toThrow("这个房间已经不能加入了。");
+  });
+
+  it("returns a finished online game to the same lobby with seats and factions preserved", async () => {
+    const { service, store } = await createServiceWithStore();
+    const host = await service.createRoom({
+      name: "Host",
+      targetPlayerCount: 2,
+      fogEnabled: false
+    });
+    const guest = await service.joinRoom({
+      roomCode: host.room.roomCode,
+      name: "Guest"
+    });
+    await service.chooseFaction({
+      roomCode: host.room.roomCode,
+      playerId: host.seat.playerId,
+      factionId: "red-rust"
+    });
+    await service.chooseFaction({
+      roomCode: host.room.roomCode,
+      playerId: guest.seat.playerId,
+      factionId: "blue-steel"
+    });
+    const activeRoom = await service.startRoom({
+      roomCode: host.room.roomCode,
+      viewerPlayerId: host.seat.playerId
+    });
+    await store.saveRoom({
+      ...activeRoom,
+      status: "finished",
+      gameState: {
+        ...activeRoom.gameState!,
+        phase: "victory",
+        winnerId: host.seat.playerId
+      }
+    });
+
+    const lobby = await service.returnToLobby({
+      roomCode: host.room.roomCode,
+      viewerPlayerId: guest.seat.playerId
+    });
+    const restarted = await service.startRoom({
+      roomCode: host.room.roomCode,
+      viewerPlayerId: host.seat.playerId
+    });
+
+    expect(lobby.status).toBe("lobby");
+    expect(lobby.gameState).toBeUndefined();
+    expect(lobby.lastCommand).toBeUndefined();
+    expect(lobby.seats.map((seat) => [seat.playerId, seat.name, seat.factionId])).toEqual([
+      ["p1", "Host", "red-rust"],
+      ["p2", "Guest", "blue-steel"]
+    ]);
+    expect(restarted.status).toBe("active");
+    expect(restarted.gameState?.players.map((player) => player.factionId)).toEqual(["red-rust", "blue-steel"]);
+  });
+
+  it("does not return an active online game to the lobby before it is finished", async () => {
+    const service = await createService();
+    const host = await service.createRoom({
+      name: "Host",
+      targetPlayerCount: 2,
+      fogEnabled: false
+    });
+    const guest = await service.joinRoom({
+      roomCode: host.room.roomCode,
+      name: "Guest"
+    });
+    await service.chooseFaction({
+      roomCode: host.room.roomCode,
+      playerId: host.seat.playerId,
+      factionId: "red-rust"
+    });
+    await service.chooseFaction({
+      roomCode: host.room.roomCode,
+      playerId: guest.seat.playerId,
+      factionId: "blue-steel"
+    });
+    await service.startRoom({
+      roomCode: host.room.roomCode,
+      viewerPlayerId: host.seat.playerId
+    });
+
+    await expect(
+      service.returnToLobby({
+        roomCode: host.room.roomCode,
+        viewerPlayerId: guest.seat.playerId
+      })
+    ).rejects.toThrow("这个房间还在游戏中。");
+  });
+
   it("enforces online authorization when applying commands", async () => {
     const service = await createService();
     const host = await service.createRoom({

@@ -1,7 +1,8 @@
-import { Music, RotateCcw, Volume2 } from "lucide-react";
+import { Music, RotateCcw, Volume2, VolumeX } from "lucide-react";
 import type { CSSProperties } from "react";
 import { useEffect, useState } from "react";
 import { DEFAULT_AUDIO_SETTINGS } from "./audioSettings";
+import { gameAudio } from "./audioController";
 import { useAudioSettings } from "./useAudio";
 
 interface AudioSettingsPanelProps {
@@ -37,6 +38,7 @@ export function AudioSettingsPanel({ className = "", deferApply = false, showAct
   }, [settings]);
 
   const visibleSettings = deferApply ? draftSettings : settings;
+  const isMuted = visibleSettings.muted || (visibleSettings.musicVolume === 0 && visibleSettings.sfxVolume === 0);
 
   const handleVolumeChange = (key: AudioVolumeKey, value: number) => {
     if (deferApply) {
@@ -45,6 +47,10 @@ export function AudioSettingsPanel({ className = "", deferApply = false, showAct
     }
 
     updateSettings({ [key]: value, muted: false });
+    if (key === "sfxVolume") {
+      gameAudio.unlock();
+      gameAudio.playClick();
+    }
   };
 
   const handleReset = () => {
@@ -54,6 +60,29 @@ export function AudioSettingsPanel({ className = "", deferApply = false, showAct
     }
 
     updateSettings(DEFAULT_AUDIO_SETTINGS);
+  };
+
+  const handleToggleMute = () => {
+    if (isMuted) {
+      const hasCurrentVolume = visibleSettings.musicVolume > 0 || visibleSettings.sfxVolume > 0;
+      const nextSettings = {
+        musicVolume: hasCurrentVolume ? visibleSettings.musicVolume : visibleSettings.lastMusicVolume,
+        sfxVolume: hasCurrentVolume ? visibleSettings.sfxVolume : visibleSettings.lastSfxVolume,
+        muted: false
+      };
+      if (deferApply) {
+        setDraftSettings((currentSettings) => ({ ...currentSettings, ...nextSettings }));
+        return;
+      }
+      updateSettings(nextSettings);
+      return;
+    }
+
+    if (deferApply) {
+      setDraftSettings((currentSettings) => ({ ...currentSettings, muted: true }));
+      return;
+    }
+    updateSettings({ muted: true });
   };
 
   const handleApply = () => {
@@ -79,9 +108,20 @@ export function AudioSettingsPanel({ className = "", deferApply = false, showAct
             <RotateCcw size={18} />
             恢复默认
           </button>
-          <button type="button" className="audio-settings-apply-button" onClick={handleApply}>
-            应用设置
+          <button
+            type="button"
+            className={isMuted ? "audio-settings-mute-button muted" : "audio-settings-mute-button"}
+            aria-pressed={isMuted}
+            onClick={handleToggleMute}
+          >
+            {isMuted ? <Volume2 size={18} /> : <VolumeX size={18} />}
+            {isMuted ? "一键恢复音量" : "一键静音"}
           </button>
+          {deferApply ? (
+            <button type="button" className="audio-settings-apply-button" onClick={handleApply}>
+              应用设置
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

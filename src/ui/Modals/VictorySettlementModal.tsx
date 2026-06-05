@@ -10,10 +10,12 @@ interface Standing {
 
 export function VictorySettlementModal({
   state,
-  onReturnHome
+  onReturnHome,
+  returnLabel = "返回主页面"
 }: {
   state: GameState;
   onReturnHome: () => void;
+  returnLabel?: string;
 }) {
   const standings = state.players
     .map((player) => ({ player, score: calculateScore(state, player.id) }))
@@ -51,7 +53,7 @@ export function VictorySettlementModal({
 
         <button type="button" className="primary victory-return-button" onClick={onReturnHome}>
           <Home size={18} />
-          返回主页面
+          {returnLabel}
         </button>
       </section>
     </div>

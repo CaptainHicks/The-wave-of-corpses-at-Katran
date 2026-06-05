@@ -14,6 +14,7 @@ vi.mock("../../online/useOnlineSession", () => ({
     chooseFaction: vi.fn(),
     startRoom: vi.fn(),
     sendCommand: vi.fn(),
+    returnToLobby: vi.fn(),
     leaveRoom: vi.fn(),
     dismissError: vi.fn(),
     resumeSavedSession: vi.fn()

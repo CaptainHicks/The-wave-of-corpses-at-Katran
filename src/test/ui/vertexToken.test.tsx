@@ -58,41 +58,41 @@ function renderVertex(militiaAtVertex: Militia[], legal = false) {
   );
 }
 
-describe("VertexToken militia lightning", () => {
-  it("does not render lightning for an empty building", () => {
+describe("VertexToken militia count marker", () => {
+  it("does not render a militia count marker for an empty building", () => {
     const { container } = renderVertex([]);
 
-    expect(container.querySelector(".militia-lightning-token")).toBeNull();
+    expect(container.querySelector(".militia-count-token")).toBeNull();
   });
 
-  it("renders yellow lightning for unactivated militia", () => {
+  it("renders a yellow militia marker for unactivated militia", () => {
     const { container } = renderVertex([militia("inactive")]);
 
-    expect(container.querySelector(".militia-lightning-token")).toHaveAttribute(
+    expect(container.querySelector(".militia-count-token")).toHaveAttribute(
       "href",
-      boardMarkerAssets.militiaLightning.inactive
+      boardMarkerAssets.militiaCountMarkers.inactive
     );
   });
 
   it.each<Militia["status"]>(["readying", "active"])(
-    "renders green lightning for %s militia",
+    "renders a green militia marker for %s militia",
     (status) => {
       const { container } = renderVertex([militia(status)]);
 
-      expect(container.querySelector(".militia-lightning-token")).toHaveAttribute(
+      expect(container.querySelector(".militia-count-token")).toHaveAttribute(
         "href",
-        boardMarkerAssets.militiaLightning.active
+        boardMarkerAssets.militiaCountMarkers.active
       );
     }
   );
 
-  it("renders one lightning token per stationed militia", () => {
+  it("renders one count marker per stationed militia", () => {
     const { container } = renderVertex([militia("inactive"), militia("active")]);
 
-    const tokens = [...container.querySelectorAll(".militia-lightning-token")];
+    const tokens = [...container.querySelectorAll(".militia-count-token")];
     expect(tokens).toHaveLength(2);
-    expect(tokens[0]).toHaveAttribute("href", boardMarkerAssets.militiaLightning.inactive);
-    expect(tokens[1]).toHaveAttribute("href", boardMarkerAssets.militiaLightning.active);
+    expect(tokens[0]).toHaveAttribute("href", boardMarkerAssets.militiaCountMarkers.inactive);
+    expect(tokens[1]).toHaveAttribute("href", boardMarkerAssets.militiaCountMarkers.active);
   });
 
   it("marks legal building targets on the piece instead of the hit area", () => {

@@ -8,6 +8,7 @@ import type {
   RoomJoinRequest,
   RoomLeaveRequest,
   RoomResumeRequest,
+  RoomReturnToLobbyRequest,
   RoomStartRequest,
   RoomView
 } from "./protocol";
@@ -28,6 +29,7 @@ type OnlineEventName =
   | "room:resume"
   | "room:start"
   | "room:chooseFaction"
+  | "room:returnToLobby"
   | "room:leave"
   | "room:command";
 type OnlineEventSuccessAck = Extract<OnlineEventAck, { ok: true }>;
@@ -215,6 +217,10 @@ export function useOnlineSession() {
     return runOnlineAck("room:command", payload);
   }, [runOnlineAck]);
 
+  const returnToLobby = useCallback(async (payload: RoomReturnToLobbyRequest) => {
+    return runOnlineAck("room:returnToLobby", payload);
+  }, [runOnlineAck]);
+
   const resumeSavedSession = useCallback(async () => {
     const savedSession = loadSavedOnlineSession();
     if (!savedSession) return undefined;
@@ -283,6 +289,7 @@ export function useOnlineSession() {
     chooseFaction,
     startRoom,
     sendCommand,
+    returnToLobby,
     leaveRoom,
     dismissError: () => setModel((current) => ({ ...current, error: undefined })),
     resumeSavedSession
@@ -356,6 +363,7 @@ export function localizeOnlineError(message: string): string {
     "Join or resume the room before starting it.": "请先加入或恢复房间，再开始游戏。",
     "Join or resume the room before choosing a faction.": "请先加入或恢复房间，再选择阵营。",
     "Join or resume the room before sending commands.": "请先加入或恢复房间，再进行操作。",
+    "Join or resume the room before returning to the lobby.": "请先加入或恢复房间，再返回大厅。",
     "Join or resume the room before leaving it.": "请先加入或恢复房间，再离开房间。",
     "Online request failed.": "联机请求失败，请稍后重试。",
     "Unknown online server error.": "联机服务器发生未知错误。"

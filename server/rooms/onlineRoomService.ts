@@ -58,6 +58,31 @@ export class OnlineRoomService {
     await this.store.removeExpiredRooms();
     return this.withRoomLock(input.roomCode, async (transaction) => {
       const room = await this.getRoomOrThrowFrom(transaction, input.roomCode);
+      const name = normalizePlayerName(input.name);
+      if (!name) {
+        throw new OnlineRoomError("请输入玩家名称。");
+      }
+
+      const disconnectedSeat = findDisconnectedSeatByName(room.seats, name);
+      if (disconnectedSeat) {
+        const timestamp = this.now();
+        const sessionToken = crypto.randomUUID();
+        const nextRoom: StoredOnlineRoom = {
+          ...room,
+          updatedAt: timestamp,
+          seats: room.seats.map((seat) =>
+            seat.playerId === disconnectedSeat.playerId
+              ? { ...seat, connected: true, lastSeenAt: timestamp, sessionToken }
+              : seat
+          )
+        };
+        await transaction.saveRoom(nextRoom);
+        return {
+          room: nextRoom,
+          seat: nextRoom.seats.find((seat) => seat.playerId === disconnectedSeat.playerId)!
+        };
+      }
+
       if (room.status !== "lobby") {
         throw new OnlineRoomError("这个房间已经不能加入了。");
       }
@@ -66,7 +91,7 @@ export class OnlineRoomService {
       }
 
       const timestamp = this.now();
-      const seat = this.createSeat(nextSeatIndex(room.seats), input, timestamp);
+      const seat = this.createSeat(nextSeatIndex(room.seats), { name }, timestamp);
       const nextRoom: StoredOnlineRoom = {
         ...room,
         updatedAt: timestamp,
@@ -201,6 +226,35 @@ export class OnlineRoomService {
     });
   }
 
+  async returnToLobby(input: {
+    roomCode: string;
+    viewerPlayerId: string;
+  }): Promise<StoredOnlineRoom> {
+    return this.withRoomLock(input.roomCode, async (transaction) => {
+      const room = await this.getRoomOrThrowFrom(transaction, input.roomCode);
+      if (!room.seats.some((seat) => seat.playerId === input.viewerPlayerId)) {
+        throw new OnlineRoomError("你不在这个房间中。");
+      }
+      if (room.status === "active") {
+        throw new OnlineRoomError("这个房间还在游戏中。");
+      }
+      if (room.status === "lobby") {
+        return room;
+      }
+
+      const timestamp = this.now();
+      const nextRoom: StoredOnlineRoom = {
+        ...room,
+        status: "lobby",
+        updatedAt: timestamp,
+        gameState: undefined,
+        lastCommand: undefined
+      };
+      await transaction.saveRoom(nextRoom);
+      return nextRoom;
+    });
+  }
+
   async resumeSession(input: {
     roomCode: string;
     sessionToken: string;
@@ -288,7 +342,7 @@ export class OnlineRoomService {
     input: { name: string },
     timestamp: number
   ): StoredRoomSeat {
-    const name = input.name.trim();
+    const name = normalizePlayerName(input.name);
     if (!name) {
       throw new OnlineRoomError("请输入玩家名称。");
     }
@@ -371,6 +425,18 @@ function nextSeatIndex(seats: StoredRoomSeat[]) {
     const match = /^p(\d+)$/.exec(seat.playerId);
     return Math.max(max, match ? Number(match[1]) : 0);
   }, 0) + 1;
+}
+
+function normalizePlayerName(name: string) {
+  return name.trim();
+}
+
+function findDisconnectedSeatByName(seats: StoredRoomSeat[], name: string) {
+  const normalizedName = name.toLocaleLowerCase();
+  const matches = seats.filter(
+    (seat) => !seat.connected && normalizePlayerName(seat.name).toLocaleLowerCase() === normalizedName
+  );
+  return matches.length === 1 ? matches[0] : undefined;
 }
 
 function randomCode(length: number) {

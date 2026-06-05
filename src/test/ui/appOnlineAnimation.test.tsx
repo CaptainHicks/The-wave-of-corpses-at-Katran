@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import App from "../../App";
 import { applyCommand } from "../../domain/rules";
@@ -27,6 +27,7 @@ type MockOnlineSession = {
   chooseFaction: ReturnType<typeof vi.fn>;
   startRoom: ReturnType<typeof vi.fn>;
   sendCommand: ReturnType<typeof vi.fn>;
+  returnToLobby: ReturnType<typeof vi.fn>;
   leaveRoom: ReturnType<typeof vi.fn>;
   dismissError: ReturnType<typeof vi.fn>;
   resumeSavedSession: ReturnType<typeof vi.fn>;
@@ -69,7 +70,13 @@ vi.mock("../../persistence/storage", () => ({
 }));
 
 vi.mock("../../ui/GameShell", () => ({
-  GameShell: () => <div data-testid="game-shell" />
+  GameShell: ({ onClear }: { onClear: () => void }) => (
+    <div data-testid="game-shell">
+      <button type="button" data-testid="clear-game" onClick={onClear}>
+        clear
+      </button>
+    </div>
+  )
 }));
 
 vi.mock("../../ui/StartScreen", () => ({
@@ -109,6 +116,22 @@ describe("App online animation sync", () => {
     expect(pushEventsSpy).toHaveBeenCalledTimes(1);
     expect(playAnimationEventsSpy).toHaveBeenCalledTimes(1);
   });
+
+  it("returns a finished online game to the room lobby instead of leaving the room", () => {
+    const returnToLobby = vi.fn();
+    const leaveRoom = vi.fn();
+    mockSession = createOnlineSessionMock({
+      gameView: createFinishedView(),
+      returnToLobby,
+      leaveRoom
+    });
+
+    render(<App />);
+    fireEvent.click(screen.getByTestId("clear-game"));
+
+    expect(returnToLobby).toHaveBeenCalledWith({ roomCode: "ROOM-APP" });
+    expect(leaveRoom).not.toHaveBeenCalled();
+  });
 });
 
 function createOnlineSessionMock(overrides: Partial<MockOnlineSession> = {}): MockOnlineSession {
@@ -124,6 +147,7 @@ function createOnlineSessionMock(overrides: Partial<MockOnlineSession> = {}): Mo
     chooseFaction: vi.fn(),
     startRoom: vi.fn(),
     sendCommand: vi.fn(),
+    returnToLobby: vi.fn(),
     leaveRoom: vi.fn(),
     dismissError: vi.fn(),
     resumeSavedSession: vi.fn(),
@@ -177,5 +201,32 @@ function createRolledView(): OnlineGameView {
     state,
     "p1",
     command
+  );
+}
+
+function createFinishedView(): OnlineGameView {
+  let state = applyCommand(undefined, {
+    type: "createGame",
+    players: [
+      { name: "玩家甲", color: "#d84f3f", factionId: "red-rust" },
+      { name: "玩家乙", color: "#2b78d4", factionId: "blue-steel" }
+    ],
+    seed: "app-online-finished"
+  });
+  state = {
+    ...state,
+    phase: "victory",
+    winnerId: "p1"
+  };
+
+  return buildOnlineGameView(
+    {
+      roomCode: "ROOM-APP",
+      hostPlayerId: "p1",
+      status: "finished",
+      connectedPlayerIds: ["p1", "p2"]
+    },
+    state,
+    "p1"
   );
 }

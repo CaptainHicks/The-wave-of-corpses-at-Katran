@@ -342,7 +342,11 @@ function App() {
     ? clearToMenu
     : () => {
         clearRuleHint();
-        onlineSession.leaveRoom();
+        if (onlineSession.gameView?.roomMeta.status === "finished") {
+          void onlineSession.returnToLobby({ roomCode: onlineSession.gameView.roomMeta.roomCode });
+        } else {
+          onlineSession.leaveRoom();
+        }
         setTool("none");
         setSelection(undefined);
         setOperationContext(undefined);

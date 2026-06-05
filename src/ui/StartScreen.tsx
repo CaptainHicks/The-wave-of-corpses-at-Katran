@@ -71,12 +71,12 @@ const START_STAGE_WIDTH = 1672;
 const START_STAGE_HEIGHT = 941;
 
 const FACTION_FLAVOR: Record<(typeof PLAYER_FACTIONS)[number]["id"], string> = {
-  "red-rust": "狂野的掠夺者，擅长战斗和快速进攻。",
-  "blue-steel": "工业与科技的信奉者，擅长建造和防御工事。",
-  "green-oasis": "擅长侦查与机动，在探索和移动方面具有优势。",
-  "gold-sand": "以救援与支援为使命，擅长治疗和资源生产。",
-  "white-tower": "掌控通讯与情报，擅长信息与策略获取。",
-  "ash-merchant": "精于交易与物流，擅长资源交换和经济。"
+  "red-rust": "由废土边缘聚起的赤色营地，旗帜和部件呈赤锈色。",
+  "blue-steel": "以钢蓝涂装标记的前哨队，保留旧工业哨站的秩序感。",
+  "green-oasis": "来自绿洲聚落的行旅队，带着水源与车队的旧记忆。",
+  "gold-sand": "扎根黄沙堡垒的幸存者，徽记映着荒漠金色。",
+  "white-tower": "围绕白塔建立的公社，信标和建筑保留明亮轮廓。",
+  "ash-merchant": "穿行灰烬荒路的商队，以冷灰色旗记辨认彼此。"
 };
 
 const CONNECTION_LABELS: Record<OnlineConnectionState, string> = {
@@ -838,7 +838,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
         <span aria-hidden="true" />
       </header>
       <section className="start-settings-panel start-secondary-frame" aria-labelledby="start-settings-title">
-        <AudioSettingsPanel className="start-audio-settings-panel" deferApply showActions />
+        <AudioSettingsPanel className="start-audio-settings-panel" showActions />
       </section>
       <button className="start-mode-return-button start-settings-return-button" aria-label="返回主菜单" onClick={returnToMain}>
         <ArrowLeft size={18} />

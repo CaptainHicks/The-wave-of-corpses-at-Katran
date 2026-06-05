@@ -532,7 +532,13 @@ export function GameShell({
           setOperationContext={setOperationContext}
         />
 
-        {state.phase === "victory" && <VictorySettlementModal state={state} onReturnHome={onClear} />}
+        {state.phase === "victory" && (
+          <VictorySettlementModal
+            state={state}
+            onReturnHome={onClear}
+            returnLabel={interactionMode === "online" ? "返回房间大厅" : "返回主页面"}
+          />
+        )}
       </div>
     </main>
   );

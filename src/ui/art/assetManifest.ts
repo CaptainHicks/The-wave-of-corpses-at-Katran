@@ -89,7 +89,7 @@ export const boardMarkerAssets = {
   blackMarket: "/assets/board/markers/black-market.v1.webp",
   zombieHorde: "/assets/board/markers/zombie-horde.v1.webp",
   merchant: "/assets/board/markers/merchant.v1.webp",
-  militiaLightning: {
+  militiaCountMarkers: {
     inactive: "/assets/board/markers/lightning-yellow.v1.webp",
     active: "/assets/board/markers/lightning-green.v1.webp"
   }

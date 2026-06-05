@@ -38,6 +38,10 @@ export interface RoomStartRequest {
   roomCode: string;
 }
 
+export interface RoomReturnToLobbyRequest {
+  roomCode: string;
+}
+
 export interface RoomLeaveRequest {
   roomCode: string;
 }

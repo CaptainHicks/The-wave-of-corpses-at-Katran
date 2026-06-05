@@ -99,8 +99,8 @@ export const GAME_ART_CRITICAL_PRELOAD_URLS = uniqueUrls([
 export const GAME_ART_PRELOAD_URLS = uniqueUrls([
   ...GAME_ART_CRITICAL_PRELOAD_URLS,
   ...buildingPieceUrls(),
-  boardMarkerAssets.militiaLightning.inactive,
-  boardMarkerAssets.militiaLightning.active,
+  boardMarkerAssets.militiaCountMarkers.inactive,
+  boardMarkerAssets.militiaCountMarkers.active,
   ...assetRefUrls([resourceCardAssets, devCardAssets])
 ]);
 

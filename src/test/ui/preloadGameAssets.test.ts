@@ -37,7 +37,7 @@ describe("game art preloading", () => {
     expect(new Set(GAME_ART_PRELOAD_URLS).size).toBe(GAME_ART_PRELOAD_URLS.length);
     expect(GAME_ART_PRELOAD_URLS).toContain("/assets/board/buildings/purple/camp.v1.webp");
     expect(GAME_ART_PRELOAD_URLS).toContain("/assets/board/buildings/red/camp-watchtower-militia-2.v1.webp");
-    expect(GAME_ART_PRELOAD_URLS).toContain("/assets/board/markers/lightning-green.v1.webp");
+    expect(GAME_ART_PRELOAD_URLS).toContain(boardMarkerAssets.militiaCountMarkers.active);
   });
 
   it("does not block tests or server rendering while waiting for browser image decode", async () => {

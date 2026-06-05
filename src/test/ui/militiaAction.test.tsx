@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { COSTS, RESOURCE_LABELS, RESOURCES } from "../../domain/constants";
+import { COSTS, RESOURCE_LABELS, RESOURCES, createResources } from "../../domain/constants";
 import type { GameState, Resources } from "../../domain/types";
 import { MilitiaAction } from "../../ui/Actions/MilitiaAction";
 
@@ -20,6 +20,7 @@ function stateWithInactiveMilitia(): GameState {
         id: "p1",
         name: "A",
         color: "#d84f3f",
+        resources: createResources({ food: 1, metal: 1, ammo: 1 }),
         militia: [{ id: "m1", ownerId: "p1", vertexId: "v1", status: "inactive" }]
       }
     ]
@@ -36,6 +37,7 @@ function stateWithActiveMilitia(): GameState {
         id: "p1",
         name: "A",
         color: "#d84f3f",
+        resources: createResources({ food: 1, metal: 1, ammo: 1 }),
         militia: [
           { id: "m1", ownerId: "p1", vertexId: "v1", status: "active" },
           { id: "m2", ownerId: "p1", vertexId: "v2", status: "active" }
@@ -63,7 +65,7 @@ describe("MilitiaAction", () => {
 
   it("renders activate militia as a full-width cost card like recruit militia", () => {
     const { container } = render(
-      <MilitiaAction state={stateWithInactiveMilitia()} submit={vi.fn()} setTool={vi.fn()} setSelection={vi.fn()} />
+      <MilitiaAction state={stateWithInactiveMilitia()} tool="none" submit={vi.fn()} setTool={vi.fn()} setSelection={vi.fn()} />
     );
 
     const recruitCard = container.querySelector<HTMLButtonElement>(".action-subsection:first-child .tool-card");
@@ -79,7 +81,7 @@ describe("MilitiaAction", () => {
 
   it("keeps the militia command row visible without exposing internal ids", () => {
     render(
-      <MilitiaAction state={stateWithInactiveMilitia()} submit={vi.fn()} setTool={vi.fn()} setSelection={vi.fn()} />
+      <MilitiaAction state={stateWithInactiveMilitia()} tool="none" submit={vi.fn()} setTool={vi.fn()} setSelection={vi.fn()} />
     );
 
     expect(screen.getByRole("button", { name: "移动民兵" })).toBeDisabled();
@@ -91,7 +93,7 @@ describe("MilitiaAction", () => {
   it("uses one move militia entry that starts board-side militia selection", () => {
     const setTool = vi.fn();
     const setSelection = vi.fn();
-    render(<MilitiaAction state={stateWithActiveMilitia()} submit={vi.fn()} setTool={setTool} setSelection={setSelection} />);
+    render(<MilitiaAction state={stateWithActiveMilitia()} tool="none" submit={vi.fn()} setTool={setTool} setSelection={setSelection} />);
 
     const moveButtons = screen.getAllByRole("button", { name: "移动民兵" });
 
@@ -102,5 +104,15 @@ describe("MilitiaAction", () => {
 
     expect(setTool).toHaveBeenCalledWith("none");
     expect(setSelection).toHaveBeenCalledWith({ kind: "moveMilitia" });
+  });
+
+  it("disables recruit and activate options until the player can pay their costs", () => {
+    const state = stateWithInactiveMilitia();
+    state.players[0].resources = createResources();
+
+    render(<MilitiaAction state={state} tool="none" submit={vi.fn()} setTool={vi.fn()} setSelection={vi.fn()} />);
+
+    expect(screen.getByRole("button", { name: /征召民兵/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /激活民兵/ })).toBeDisabled();
   });
 });

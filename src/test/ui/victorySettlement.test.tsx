@@ -93,4 +93,33 @@ describe("Victory settlement", () => {
 
     expect(onClear).toHaveBeenCalledOnce();
   });
+
+  it("labels the online victory action as returning to the room lobby", () => {
+    const onClear = vi.fn();
+    render(
+      <GameShell
+        state={victoryState()}
+        privacy={false}
+        seatPlayerName="A"
+        viewerPlayerId="p1"
+        interactionMode="online"
+        onlineRoomCode="ROOM42"
+        onlineConnectionState="connected"
+        tool="none"
+        animationEvents={[]}
+        animationBusy={false}
+        onClosePrivacy={vi.fn()}
+        onDismissError={vi.fn()}
+        onClear={onClear}
+        submit={vi.fn()}
+        setTool={vi.fn()}
+        setSelection={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "返回房间大厅" }));
+
+    expect(onClear).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("button", { name: "返回主页面" })).not.toBeInTheDocument();
+  });
 });

@@ -14,14 +14,14 @@ type CostKey =
   | "devCard";
 
 const COST_ITEMS: Array<{ key: CostKey; label: string; note: string; iconUrl: string }> = [
-  { key: "transport", label: "运输线", note: "铺设补给通道", iconUrl: "/assets/hud/transport.v1.webp" },
-  { key: "convoy", label: "装甲车队", note: "部署机动火力", iconUrl: "/assets/hud/convoy.v1.webp" },
-  { key: "camp", label: "营地", note: "建立前线据点", iconUrl: "/assets/hud/camp.v1.webp" },
-  { key: "fortress", label: "堡垒升级", note: "加固核心据点", iconUrl: "/assets/hud/fortress.v1.webp" },
-  { key: "watchtower", label: "哨塔", note: "拓宽侦察视野", iconUrl: "/assets/hud/watchtower.v1.webp" },
-  { key: "militia", label: "征召民兵", note: "补充守备人手", iconUrl: "/assets/hud/militia.v1.webp" },
-  { key: "activateMilitia", label: "激活民兵", note: "投入待命单位", iconUrl: "/assets/hud/militia.v1.webp" },
-  { key: "devCard", label: "购买发展卡", note: "抽取战术储备", iconUrl: "/assets/hud/dev-card-back.v1.webp" }
+  { key: "transport", label: "运输线", note: "连接网络，计入最长补给线", iconUrl: "/assets/hud/transport.v1.webp" },
+  { key: "convoy", label: "装甲车队", note: "可移动，能探索迷雾", iconUrl: "/assets/hud/convoy.v1.webp" },
+  { key: "camp", label: "营地", note: "产出1张资源，值1分", iconUrl: "/assets/hud/camp.v1.webp" },
+  { key: "fortress", label: "堡垒升级", note: "产出翻倍，值2分", iconUrl: "/assets/hud/fortress.v1.webp" },
+  { key: "watchtower", label: "哨塔", note: "每座让手牌上限+2", iconUrl: "/assets/hud/watchtower.v1.webp" },
+  { key: "militia", label: "征召民兵", note: "驻守己方建筑，每处最多2个", iconUrl: "/assets/hud/militia.v1.webp" },
+  { key: "activateMilitia", label: "激活民兵", note: "参与防御，之后可移动/驱逐", iconUrl: "/assets/hud/militia.v1.webp" },
+  { key: "devCard", label: "购买发展卡", note: "抽取发展卡，下回合可用", iconUrl: "/assets/hud/dev-card-back.v1.webp" }
 ];
 
 export function BuildCostPanel({ onClose }: { onClose: () => void }) {

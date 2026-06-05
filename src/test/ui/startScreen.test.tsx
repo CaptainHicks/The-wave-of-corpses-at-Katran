@@ -1,8 +1,10 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PLAYER_FACTIONS } from "../../domain/constants";
 import type { LobbyView } from "../../online/protocol";
 import { StartScreen } from "../../ui/StartScreen";
+
+const AUDIO_SETTINGS_KEY = "zombie-catan-audio-settings";
 
 function createOnlineProps(overrides: Partial<Parameters<typeof StartScreen>[0]["online"]> = {}) {
   return {
@@ -89,6 +91,10 @@ function sampleLobbyView(overrides: Partial<LobbyView> = {}): LobbyView {
 }
 
 describe("StartScreen", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
   it("renders the main menu with version text", () => {
     renderStartScreen();
 
@@ -221,10 +227,26 @@ describe("StartScreen", () => {
     expect(screen.getByLabelText("游戏背景音乐音量")).toHaveValue("70");
     expect(screen.getByLabelText("游戏音效音量")).toHaveValue("80");
     expect(screen.getByRole("button", { name: "恢复默认" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "应用设置" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /一键静音/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "返回主菜单" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "应用设置" }));
+    fireEvent.change(screen.getByLabelText("游戏背景音乐音量"), { target: { value: "45" } });
+    expect(JSON.parse(window.localStorage.getItem(AUDIO_SETTINGS_KEY)!)).toMatchObject({
+      musicVolume: 45,
+      muted: false
+    });
+
+    fireEvent.change(screen.getByLabelText("游戏音效音量"), { target: { value: "35" } });
+    expect(JSON.parse(window.localStorage.getItem(AUDIO_SETTINGS_KEY)!)).toMatchObject({
+      musicVolume: 45,
+      sfxVolume: 35,
+      muted: false
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /一键静音/ }));
+    expect(screen.getByRole("button", { name: /一键恢复音量/ })).toBeInTheDocument();
+    expect(screen.getByLabelText("游戏背景音乐音量")).toHaveValue("45");
+    expect(screen.getByLabelText("游戏音效音量")).toHaveValue("35");
 
     expect(screen.getByRole("heading", { name: "设置" })).toBeInTheDocument();
 
@@ -402,6 +424,20 @@ describe("StartScreen", () => {
       roomCode: "ROOM42",
       factionId: undefined
     });
+  });
+
+  it("describes factions as flavor only without implying special abilities", () => {
+    const online = createOnlineProps({ lobbyView: sampleLobbyView() });
+    const { container } = renderStartScreen({ online });
+    const factionGridText = container.querySelector(".start-lobby-faction-grid")?.textContent ?? "";
+
+    expect(factionGridText).toContain("由废土边缘聚起的赤色营地，旗帜和部件呈赤锈色。");
+    expect(factionGridText).toContain("以钢蓝涂装标记的前哨队，保留旧工业哨站的秩序感。");
+    expect(factionGridText).toContain("来自绿洲聚落的行旅队，带着水源与车队的旧记忆。");
+    expect(factionGridText).toContain("扎根黄沙堡垒的幸存者，徽记映着荒漠金色。");
+    expect(factionGridText).toContain("围绕白塔建立的公社，信标和建筑保留明亮轮廓。");
+    expect(factionGridText).toContain("穿行灰烬荒路的商队，以冷灰色旗记辨认彼此。");
+    expect(factionGridText).not.toMatch(/擅长|优势|掌控|精于|技能|加成|能力/);
   });
 
   it("renders the online lobby and lets the host start or leave", () => {
