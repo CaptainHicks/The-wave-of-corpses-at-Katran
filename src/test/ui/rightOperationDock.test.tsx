@@ -103,6 +103,7 @@ describe("RightOperationDock", () => {
 
     expect(screen.getByRole("region", { name: "操作倒计时" })).toHaveTextContent("1:00");
     expect(screen.getByText("A 超时后系统自动托管。")).toBeInTheDocument();
+    expect(document.querySelector(".turn-timer-track i")).toHaveStyle({ "--turn-timer-progress": "1" });
   });
 
   it("opens system menu actions in a modal", () => {

@@ -142,7 +142,9 @@ function ScoreDetailModal({
         <header className="score-detail-header">
           <div>
             <span className="score-detail-kicker">胜利点</span>
-            <h2 id={titleId}>{player.name} 得分明细</h2>
+            <h2 id={titleId} title={`${player.name} 得分明细`}>
+              {player.name} 得分明细
+            </h2>
           </div>
           <strong className="score-detail-total">总分 {score.total}</strong>
           <button type="button" className="icon-button modal-close-button" aria-label="关闭得分明细" onClick={onClose}>

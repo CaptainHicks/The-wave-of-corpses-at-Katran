@@ -166,6 +166,39 @@ describe("OnlineRoomService", () => {
     expect(room?.seats.map((seat) => seat.playerId)).toEqual(["p1", "p2", "p3"]);
   });
 
+  it("stores lobby chat messages and rejects blank chat", async () => {
+    const service = await createService();
+    const host = await service.createRoom({
+      name: "Host",
+      targetPlayerCount: 2,
+      fogEnabled: true
+    });
+    const guest = await service.joinRoom({
+      roomCode: host.room.roomCode,
+      name: "Guest"
+    });
+
+    const room = await service.sendChatMessage({
+      roomCode: host.room.roomCode,
+      viewerPlayerId: guest.seat.playerId,
+      text: "  大家准备一下\n马上开始  "
+    });
+
+    expect(room.chatMessages?.at(-1)).toMatchObject({
+      kind: "player",
+      playerId: guest.seat.playerId,
+      playerName: "Guest",
+      text: "大家准备一下 马上开始"
+    });
+    await expect(
+      service.sendChatMessage({
+        roomCode: host.room.roomCode,
+        viewerPlayerId: guest.seat.playerId,
+        text: "   "
+      })
+    ).rejects.toThrow("请输入聊天内容。");
+  });
+
   it("uses a store transaction for lobby mutations when the store supports it", async () => {
     const { service, store } = await createTransactionalService();
     const host = await service.createRoom({

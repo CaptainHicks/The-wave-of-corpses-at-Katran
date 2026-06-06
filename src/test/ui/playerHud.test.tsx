@@ -118,4 +118,19 @@ describe("PlayerHud", () => {
     expect(within(dialog).getByText("商人")).toBeInTheDocument();
     expect(within(dialog).getByText("当前控制商人")).toBeInTheDocument();
   });
+
+  it("keeps the full score dialog title available for long player names", () => {
+    const state = scoringState();
+    const longName = "重生之回到开始游戏的时刻还要继续写很长很长的名字";
+    state.players[0].name = longName;
+
+    render(<PlayerHud state={state} />);
+
+    fireEvent.click(screen.getByRole("button", { name: `${longName}当前得分：10，查看得分明细` }));
+
+    expect(screen.getByRole("heading", { name: `${longName} 得分明细` })).toHaveAttribute(
+      "title",
+      `${longName} 得分明细`
+    );
+  });
 });

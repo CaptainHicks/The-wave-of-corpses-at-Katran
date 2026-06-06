@@ -15,6 +15,7 @@ function createOnlineProps(overrides: Partial<Parameters<typeof StartScreen>[0][
     onCreateRoom: vi.fn(),
     onJoinRoom: vi.fn(),
     onChooseFaction: vi.fn(),
+    onSendChatMessage: vi.fn(),
     onStartRoom: vi.fn(),
     onLeaveRoom: vi.fn(),
     onDismissError: vi.fn(),
@@ -83,6 +84,10 @@ function sampleLobbyView(overrides: Partial<LobbyView> = {}): LobbyView {
     seats: [
       { playerId: "p1", name: "房主A", color: PLAYER_FACTIONS[0].color, factionId: PLAYER_FACTIONS[0].id, connected: true },
       { playerId: "p2", name: "玩家B", color: "#6f6657", factionId: undefined, connected: true }
+    ],
+    chatMessages: [
+      { id: "system-1", kind: "system", text: "房主A 创建了房间。", createdAt: 1_000 },
+      { id: "chat-1", kind: "player", playerId: "p1", playerName: "房主A", text: "准备选阵营。", createdAt: 1_001 }
     ],
     canStart: false,
     startBlockedReason: "只有房主可以开始游戏。",
@@ -402,7 +407,7 @@ describe("StartScreen", () => {
 
     expect(screen.getByText("房间大厅")).toBeInTheDocument();
     expect(screen.getByText("ROOM42")).toBeInTheDocument();
-    expect(screen.getByText("房主A")).toBeInTheDocument();
+    expect(screen.getAllByText("房主A").length).toBeGreaterThan(0);
     expect(screen.getByText("玩家B")).toBeInTheDocument();
     expect(screen.getByText(/未选择阵营/, { selector: "small" })).toBeInTheDocument();
 
@@ -424,6 +429,28 @@ describe("StartScreen", () => {
       roomCode: "ROOM42",
       factionId: undefined
     });
+  });
+
+  it("renders lobby chat messages and sends a new chat message", async () => {
+    const online = createOnlineProps({ lobbyView: sampleLobbyView() });
+    renderStartScreen({ online });
+
+    expect(screen.getByText("【系统】房主A 创建了房间。")).toBeInTheDocument();
+    expect(screen.getAllByText("房主A").length).toBeGreaterThan(0);
+    expect(screen.getByText("准备选阵营。")).toBeInTheDocument();
+
+    const chatInput = screen.getByLabelText("房间聊天内容");
+    const sendButton = screen.getByRole("button", { name: "发送" });
+    expect(sendButton).toBeDisabled();
+
+    fireEvent.change(chatInput, { target: { value: " 我来了 " } });
+    fireEvent.click(sendButton);
+
+    expect(online.onSendChatMessage).toHaveBeenCalledWith({
+      roomCode: "ROOM42",
+      text: "我来了"
+    });
+    await waitFor(() => expect(chatInput).toHaveValue(""));
   });
 
   it("describes factions as flavor only without implying special abilities", () => {

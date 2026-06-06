@@ -77,8 +77,12 @@ export function VertexToken({
   const targetHitRadius = coarsePointer ? 20 : 18;
   const touchCueRadius = 13;
   const emptyHitRadius = coarsePointer ? 6 : 5;
-  const militiaMarkerSize = pieceBox ? Math.max(16, Math.min(22, pieceBox.height * 0.5)) : 0;
-  const militiaMarkerTop = pieceBox ? vertex.y - pieceBox.height * 0.62 - militiaMarkerSize * 0.58 : vertex.y;
+  const militiaMarkerSize = pieceBox ? Math.max(9, Math.min(12, pieceBox.height * 0.28)) : 0;
+  const militiaMarkerTop = pieceBox ? vertex.y + pieceBox.height * 0.12 : vertex.y;
+  const militiaMarkerRight =
+    pieceBox && vertex.building
+      ? vertex.x + pieceBox.width * (vertex.building.type === "fortress" ? 0.42 : 0.64)
+      : vertex.x;
 
   return (
     <g
@@ -166,12 +170,12 @@ export function VertexToken({
         pieceBox &&
         visibleMilitiaMarkers.map((item, index) => {
           const isActivated = item.status !== "inactive";
-          const xOffset = visibleMilitiaMarkers.length === 1 ? 0 : index === 0 ? -7 : 7;
+          const xOffset = visibleMilitiaMarkers.length === 1 ? 0 : index === 0 ? -militiaMarkerSize * 0.62 : 0;
           return (
             <image
               key={`militia-marker-${item.id}`}
               href={boardMarkerAssets.militiaCountMarkers[isActivated ? "active" : "inactive"]}
-              x={vertex.x + xOffset - militiaMarkerSize / 2}
+              x={militiaMarkerRight + xOffset - militiaMarkerSize}
               y={militiaMarkerTop}
               width={militiaMarkerSize}
               height={militiaMarkerSize}

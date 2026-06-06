@@ -5,6 +5,7 @@ import express from "express";
 import { Server as SocketIoServer } from "socket.io";
 import type {
   OnlineEventAck,
+  RoomChatRequest,
   RoomChooseFactionRequest,
   RoomCommandRequest,
   RoomCreateRequest,
@@ -248,6 +249,28 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("room:chat", async (payload: RoomChatRequest, ack?: (result: OnlineEventAck) => void) => {
+    try {
+      const session = socketSessions.get(socket.id);
+      if (!session || session.roomCode !== payload.roomCode) {
+        throw new OnlineRoomError("请先加入或恢复房间，再发送聊天消息。");
+      }
+      const room = await roomService.sendChatMessage({
+        roomCode: payload.roomCode,
+        viewerPlayerId: session.playerId,
+        text: payload.text
+      });
+      await emitRoomViews(room);
+      ack?.({
+        ok: true,
+        roomCode: room.roomCode,
+        viewerPlayerId: session.playerId
+      });
+    } catch (error) {
+      ack?.(toAckError(error));
+    }
+  });
+
   socket.on("room:returnToLobby", async (payload: RoomReturnToLobbyRequest, ack?: (result: OnlineEventAck) => void) => {
     try {
       const session = socketSessions.get(socket.id);
@@ -327,7 +350,12 @@ async function emitRoomViews(room: StoredOnlineRoom) {
     } as const;
 
     for (const seat of room.seats) {
-      emitToPlayer(room.roomCode, seat.playerId, "room:view", buildLobbyView(lobbyMeta, room.seats, seat.playerId));
+      emitToPlayer(
+        room.roomCode,
+        seat.playerId,
+        "room:view",
+        buildLobbyView(lobbyMeta, room.seats, seat.playerId, room.chatMessages ?? [])
+      );
     }
     return;
   }

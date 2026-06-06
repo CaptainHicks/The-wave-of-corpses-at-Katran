@@ -51,6 +51,11 @@ export interface RoomCommandRequest {
   command: Command;
 }
 
+export interface RoomChatRequest {
+  roomCode: string;
+  text: string;
+}
+
 export interface OnlineEventSuccess {
   ok: true;
   roomCode: string;
@@ -144,11 +149,21 @@ export interface LobbySeatView {
   connected: boolean;
 }
 
+export interface LobbyChatMessageView {
+  id: string;
+  kind: "system" | "player";
+  playerId?: string;
+  playerName?: string;
+  text: string;
+  createdAt: number;
+}
+
 export interface LobbyView {
   kind: "lobby";
   viewerPlayerId: string;
   roomMeta: LobbyRoomMetaSnapshot;
   seats: LobbySeatView[];
+  chatMessages: LobbyChatMessageView[];
   canStart: boolean;
   startBlockedReason?: string;
 }
@@ -233,7 +248,8 @@ export function buildLobbyView(
     factionId?: string;
     connected: boolean;
   }>,
-  viewerPlayerId: string
+  viewerPlayerId: string,
+  chatMessages: LobbyChatMessageView[] = []
 ): LobbyView {
   const roomFilled = seats.length === roomMeta.targetPlayerCount;
   const allFactionsChosen = seats.every((seat) => Boolean(seat.factionId));
@@ -245,6 +261,7 @@ export function buildLobbyView(
     viewerPlayerId,
     roomMeta,
     seats: buildLobbySeatViews(seats),
+    chatMessages,
     canStart: isHost && roomReady,
     startBlockedReason: isHost
       ? roomFilled

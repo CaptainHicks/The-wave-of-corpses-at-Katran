@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import type {
   OnlineEventAck,
+  RoomChatRequest,
   RoomChooseFactionRequest,
   RoomCommandRequest,
   RoomCreateRequest,
@@ -29,6 +30,7 @@ type OnlineEventName =
   | "room:resume"
   | "room:start"
   | "room:chooseFaction"
+  | "room:chat"
   | "room:returnToLobby"
   | "room:leave"
   | "room:command";
@@ -217,6 +219,10 @@ export function useOnlineSession() {
     return runOnlineAck("room:command", payload);
   }, [runOnlineAck]);
 
+  const sendChatMessage = useCallback(async (payload: RoomChatRequest) => {
+    return runOnlineAck("room:chat", payload);
+  }, [runOnlineAck]);
+
   const returnToLobby = useCallback(async (payload: RoomReturnToLobbyRequest) => {
     return runOnlineAck("room:returnToLobby", payload);
   }, [runOnlineAck]);
@@ -289,6 +295,7 @@ export function useOnlineSession() {
     chooseFaction,
     startRoom,
     sendCommand,
+    sendChatMessage,
     returnToLobby,
     leaveRoom,
     dismissError: () => setModel((current) => ({ ...current, error: undefined })),
@@ -346,11 +353,13 @@ export function localizeOnlineError(message: string): string {
     "That faction has already been chosen by another player.": "这个阵营已经被其他玩家选择了。",
     "This room has already started.": "这个房间已经开始游戏了。",
     "Only the host can start the room.": "只有房主可以开始游戏。",
+    "Only lobby rooms can receive chat messages.": "只有在房间大厅里才能发送聊天消息。",
     "The room must be full before the host can start the game.": "房间满员后，房主才能开始游戏。",
     "Every player must choose a faction before the host can start the game.": "所有玩家都选择阵营后，房主才能开始游戏。",
     "This room is not in an active game.": "这个房间当前不在游戏中。",
     "Failed to allocate a unique room code.": "房间码生成失败，请稍后重试。",
     "Player name is required.": "请输入玩家名称。",
+    "Chat message is required.": "请输入聊天内容。",
     "Room not found.": "没有找到这个房间。",
     "Online rooms support 2 to 6 players.": "在线房间支持 2 到 6 名玩家。",
     "This player cannot issue that command in online mode.": "这名玩家不能在联机模式中执行这个操作。",
@@ -362,6 +371,7 @@ export function localizeOnlineError(message: string): string {
     "Saved session not found.": "没有找到可恢复的联机房间。",
     "Join or resume the room before starting it.": "请先加入或恢复房间，再开始游戏。",
     "Join or resume the room before choosing a faction.": "请先加入或恢复房间，再选择阵营。",
+    "Join or resume the room before sending chat messages.": "请先加入或恢复房间，再发送聊天消息。",
     "Join or resume the room before sending commands.": "请先加入或恢复房间，再进行操作。",
     "Join or resume the room before returning to the lobby.": "请先加入或恢复房间，再返回大厅。",
     "Join or resume the room before leaving it.": "请先加入或恢复房间，再离开房间。",

@@ -1,4 +1,4 @@
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, BellRing } from "lucide-react";
 import {
   useEffect,
   useLayoutEffect,
@@ -57,17 +57,27 @@ const DEFAULT_MAP_SCALE = 0.7;
 const MIN_MAP_SCALE = 0.62;
 const MAX_MAP_SCALE = 4.2;
 const MAP_ZOOM_STEP = 0.18;
+const MAP_WHEEL_DELTA_PER_ZOOM_STEP = 100;
+const MAP_MAX_WHEEL_ZOOM_DELTA_PER_FRAME = 0.32;
 const MAP_EDGE_GUARD_PX = 64;
 const MAP_DRAG_START_THRESHOLD_PX = 8;
 const GAME_STAGE_WIDTH = 1672;
 const GAME_STAGE_HEIGHT = 941;
 const TURN_TIME_LIMIT_SECONDS = 60;
 const OPERATION_HINT_VISIBLE_MS = 4200;
+const ONLINE_TURN_REMINDER_VISIBLE_MS = 2600;
 
 interface MapViewState {
   scale: number;
   x: number;
   y: number;
+}
+
+interface MapMetrics {
+  layerWidth: number;
+  layerHeight: number;
+  worldWidth: number;
+  worldHeight: number;
 }
 
 interface MapDragState {
@@ -92,6 +102,13 @@ interface MapPinchState {
   startMapView: MapViewState;
 }
 
+interface OnlineTurnReminder {
+  key: string;
+  playerName: string;
+  turn: number;
+  pending: boolean;
+}
+
 function clampMapScale(scale: number) {
   return Math.min(MAX_MAP_SCALE, Math.max(MIN_MAP_SCALE, Number(scale.toFixed(2))));
 }
@@ -104,6 +121,20 @@ function getStageScale() {
 function syncFixedStageScale(scale: number) {
   if (typeof document === "undefined") return;
   document.documentElement.style.setProperty("--fixed-stage-scale", String(scale));
+}
+
+function formatMapTransformNumber(value: number) {
+  return Number(value.toFixed(3)).toString();
+}
+
+function buildMapTransform(view: MapViewState) {
+  return `translate3d(calc(-50% + ${formatMapTransformNumber(view.x)}px), calc(-50% + ${formatMapTransformNumber(
+    view.y
+  )}px), 0)`;
+}
+
+function buildMapScaleTransform(view: MapViewState) {
+  return `scale(${formatMapTransformNumber(view.scale)})`;
 }
 
 export function GameShell({
@@ -146,7 +177,14 @@ export function GameShell({
   ].join(":");
   const [turnTimeRemaining, setTurnTimeRemaining] = useState(TURN_TIME_LIMIT_SECONDS);
   const [visibleOperationHintText, setVisibleOperationHintText] = useState<string>();
+  const [visibleOnlineTurnReminder, setVisibleOnlineTurnReminder] = useState<OnlineTurnReminder>();
   const visibleOperationHint = canInteract && !ruleHint ? visibleOperationHintText : undefined;
+  const onlineTurnReminderPlayer = state.players.find((player) => player.id === activeTimerPlayerId);
+  const onlineTurnReminderPlayerName = onlineTurnReminderPlayer?.name;
+  const onlineTurnReminderKey =
+    interactionMode === "online" && mode !== "victory" && activeTimerPlayerId === viewerPlayerId && onlineTurnReminderPlayer
+      ? [state.turn, activeTimerPlayerId, state.pending?.kind ?? "turn"].join(":")
+      : undefined;
   const submittedTimeoutKeyRef = useRef<string>();
   const submitRef = useRef(submit);
   const [stageScale, setStageScale] = useState(getStageScale);
@@ -158,20 +196,45 @@ export function GameShell({
   const [isPanning, setIsPanning] = useState(false);
   const mapLayerRef = useRef<HTMLElement | null>(null);
   const mapWorldRef = useRef<HTMLDivElement | null>(null);
+  const mapScaleWorldRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<MapDragState>();
   const activePointersRef = useRef<Map<number, ActiveMapPointer>>(new Map());
   const pinchStateRef = useRef<MapPinchState>();
+  const mapMetricsRef = useRef<MapMetrics>({
+    layerWidth: 0,
+    layerHeight: 0,
+    worldWidth: 0,
+    worldHeight: 0
+  });
+  const pendingMapViewRef = useRef<MapViewState>();
+  const mapFrameRef = useRef<number>();
+  const wheelZoomDeltaRef = useRef(0);
+  const wheelZoomFrameRef = useRef<number>();
   const suppressBoardClickRef = useRef(false);
   const gameStageStyle = {
     "--game-stage-scale": stageScale
   } as CSSProperties;
   const getMapView = () => mapViewRef.current;
-  const getPanBounds = (scale: number) => {
+  const measureMapMetrics = () => {
     const layer = mapLayerRef.current;
     const world = mapWorldRef.current;
-    if (!layer || !world) return { x: 0, y: 0 };
-    const maxX = Math.max(0, (world.offsetWidth * scale - layer.clientWidth) / 2 - MAP_EDGE_GUARD_PX);
-    const maxY = Math.max(0, (world.offsetHeight * scale - layer.clientHeight) / 2 - MAP_EDGE_GUARD_PX);
+    if (!layer || !world) return mapMetricsRef.current;
+    const nextMetrics = {
+      layerWidth: layer.clientWidth,
+      layerHeight: layer.clientHeight,
+      worldWidth: world.offsetWidth,
+      worldHeight: world.offsetHeight
+    };
+    mapMetricsRef.current = nextMetrics;
+    return nextMetrics;
+  };
+  const getPanBounds = (scale: number) => {
+    const metrics =
+      mapMetricsRef.current.layerWidth > 0 && mapMetricsRef.current.worldWidth > 0
+        ? mapMetricsRef.current
+        : measureMapMetrics();
+    const maxX = Math.max(0, (metrics.worldWidth * scale - metrics.layerWidth) / 2 - MAP_EDGE_GUARD_PX);
+    const maxY = Math.max(0, (metrics.worldHeight * scale - metrics.layerHeight) / 2 - MAP_EDGE_GUARD_PX);
     return { x: maxX, y: maxY };
   };
   const constrainMapView = (view: MapViewState): MapViewState => {
@@ -182,26 +245,69 @@ export function GameShell({
       y: Math.min(bounds.y, Math.max(-bounds.y, view.y))
     };
   };
-  const applyMapView = (view: MapViewState) => {
+  const writeMapViewStyle = (view: MapViewState) => {
+    const world = mapWorldRef.current;
+    const scaleWorld = mapScaleWorldRef.current;
+    if (!world || !scaleWorld) return;
+    world.style.transform = buildMapTransform(view);
+    scaleWorld.style.transform = buildMapScaleTransform(view);
+  };
+  const flushMapViewStyle = () => {
+    mapFrameRef.current = undefined;
+    const view = pendingMapViewRef.current;
+    if (!view) return;
+    pendingMapViewRef.current = undefined;
+    writeMapViewStyle(view);
+  };
+  const scheduleMapViewStyle = (view: MapViewState) => {
+    pendingMapViewRef.current = view;
+    if (mapFrameRef.current !== undefined) return;
+    mapFrameRef.current = window.requestAnimationFrame(flushMapViewStyle);
+  };
+  const applyMapView = (view: MapViewState, immediate = false) => {
     const nextView = constrainMapView(view);
     mapViewRef.current = nextView;
-    const world = mapWorldRef.current;
-    if (world) {
-      world.style.setProperty("--map-scale", String(nextView.scale));
-      world.style.setProperty("--map-pan-x", `${nextView.x}px`);
-      world.style.setProperty("--map-pan-y", `${nextView.y}px`);
+    if (immediate) {
+      if (mapFrameRef.current !== undefined) {
+        window.cancelAnimationFrame(mapFrameRef.current);
+        mapFrameRef.current = undefined;
+      }
+      pendingMapViewRef.current = undefined;
+      writeMapViewStyle(nextView);
+    } else {
+      scheduleMapViewStyle(nextView);
     }
     return nextView;
   };
   const changeMapScale = (delta: number) => {
     const view = getMapView();
     const nextScale = clampMapScale(view.scale + delta);
+    if (nextScale === view.scale) return;
     const scaleRatio = nextScale / view.scale;
     applyMapView({
       scale: nextScale,
       x: view.x * scaleRatio,
       y: view.y * scaleRatio
     });
+  };
+  const normalizeWheelDeltaY = (event: WheelEvent<HTMLElement>) => {
+    if (event.deltaMode === 1) return event.deltaY * 16;
+    if (event.deltaMode === 2) return event.deltaY * (mapLayerRef.current?.clientHeight || 800);
+    return event.deltaY;
+  };
+  const flushWheelZoom = () => {
+    wheelZoomFrameRef.current = undefined;
+    const rawDelta = wheelZoomDeltaRef.current;
+    wheelZoomDeltaRef.current = 0;
+    const zoomDelta = Math.max(
+      -MAP_MAX_WHEEL_ZOOM_DELTA_PER_FRAME,
+      Math.min(MAP_MAX_WHEEL_ZOOM_DELTA_PER_FRAME, (-rawDelta / MAP_WHEEL_DELTA_PER_ZOOM_STEP) * MAP_ZOOM_STEP)
+    );
+    changeMapScale(zoomDelta);
+  };
+  const scheduleWheelZoom = () => {
+    if (wheelZoomFrameRef.current !== undefined) return;
+    wheelZoomFrameRef.current = window.requestAnimationFrame(flushWheelZoom);
   };
   const getLayerAnchor = (clientX: number, clientY: number) => {
     const layer = mapLayerRef.current;
@@ -261,7 +367,8 @@ export function GameShell({
   };
   const handleMapWheel = (event: WheelEvent<HTMLElement>) => {
     event.preventDefault();
-    changeMapScale(event.deltaY < 0 ? MAP_ZOOM_STEP : -MAP_ZOOM_STEP);
+    wheelZoomDeltaRef.current += normalizeWheelDeltaY(event);
+    scheduleWheelZoom();
   };
   const handleMapPointerDown = (event: PointerEvent<HTMLElement>) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
@@ -364,12 +471,33 @@ export function GameShell({
   };
 
   useLayoutEffect(() => {
-    applyMapView(getMapView());
+    measureMapMetrics();
+    applyMapView(getMapView(), true);
   }, []);
 
   useEffect(() => {
     submitRef.current = submit;
   }, [submit]);
+
+  useEffect(() => {
+    if (!onlineTurnReminderKey || !onlineTurnReminderPlayerName) {
+      setVisibleOnlineTurnReminder(undefined);
+      return;
+    }
+
+    setVisibleOnlineTurnReminder({
+      key: onlineTurnReminderKey,
+      playerName: onlineTurnReminderPlayerName,
+      turn: state.turn,
+      pending: Boolean(state.pending)
+    });
+
+    const timerId = window.setTimeout(() => {
+      setVisibleOnlineTurnReminder((current) => (current?.key === onlineTurnReminderKey ? undefined : current));
+    }, ONLINE_TURN_REMINDER_VISIBLE_MS);
+
+    return () => window.clearTimeout(timerId);
+  }, [onlineTurnReminderKey, onlineTurnReminderPlayerName, state.pending?.kind, state.turn]);
 
   useEffect(() => {
     if (!operationHint) {
@@ -386,11 +514,19 @@ export function GameShell({
       const nextScale = getStageScale();
       setStageScale(nextScale);
       syncFixedStageScale(nextScale);
-      applyMapView(getMapView());
+      measureMapMetrics();
+      applyMapView(getMapView(), true);
     };
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (mapFrameRef.current !== undefined) window.cancelAnimationFrame(mapFrameRef.current);
+      if (wheelZoomFrameRef.current !== undefined) window.cancelAnimationFrame(wheelZoomFrameRef.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -433,6 +569,7 @@ export function GameShell({
       <div className="app-shell game-shell" style={gameStageStyle}>
         <div className="shell-background-layer" aria-hidden="true" />
         <ZombieSiegeAlert events={animationEvents} />
+        {visibleOnlineTurnReminder && <OnlineTurnReminderAlert reminder={visibleOnlineTurnReminder} />}
 
         {interactionMode === "hot-seat" && privacy && (
           <PrivacyGate
@@ -476,19 +613,21 @@ export function GameShell({
           onClickCapture={handleMapClickCapture}
         >
           <div className="map-world" ref={mapWorldRef}>
-            <div className="map-battlefield" aria-hidden="true" />
-            <div className="map-center-zone" aria-hidden="true" />
-            <div className="map-board-frame">
-              <BoardView
-                state={state}
-                tool={tool}
-                selection={selection}
-                canInteract={canInteract}
-                animationEvents={animationEvents}
-                setSelection={setSelection}
-                reportError={onReportError}
-                submit={submit}
-              />
+            <div className="map-scale-world" ref={mapScaleWorldRef}>
+              <div className="map-battlefield" aria-hidden="true" />
+              <div className="map-center-zone" aria-hidden="true" />
+              <div className="map-board-frame">
+                <BoardView
+                  state={state}
+                  tool={tool}
+                  selection={selection}
+                  canInteract={canInteract}
+                  animationEvents={animationEvents}
+                  setSelection={setSelection}
+                  reportError={onReportError}
+                  submit={submit}
+                />
+              </div>
             </div>
           </div>
         </section>
@@ -546,4 +685,20 @@ export function GameShell({
 
 function formatToastMessage(message: string) {
   return message.trim().replace(/[。.]$/, "");
+}
+
+function OnlineTurnReminderAlert({ reminder }: { reminder: OnlineTurnReminder }) {
+  return (
+    <div className="online-turn-reminder" role="status" aria-live="assertive">
+      <div className="online-turn-reminder__flare" aria-hidden="true" />
+      <div className="online-turn-reminder__panel">
+        <BellRing size={54} aria-hidden="true" />
+        <div>
+          <span>{reminder.pending ? "需要你响应" : `第 ${reminder.turn} 回合`}</span>
+          <strong>轮到你了</strong>
+          <p>{reminder.pending ? `${reminder.playerName}，请处理当前响应。` : `${reminder.playerName}，开始你的行动。`}</p>
+        </div>
+      </div>
+    </div>
+  );
 }

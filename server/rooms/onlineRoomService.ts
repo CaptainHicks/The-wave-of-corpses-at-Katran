@@ -8,6 +8,8 @@ import type { StoredOnlineRoom, StoredRoomSeat } from "./types";
 
 const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const UNSELECTED_SEAT_COLOR = "#6f6657";
+const MAX_CHAT_MESSAGES = 80;
+const MAX_CHAT_MESSAGE_LENGTH = 160;
 
 export class OnlineRoomError extends Error {
   constructor(message: string) {
@@ -45,7 +47,8 @@ export class OnlineRoomService {
       targetPlayerCount: input.targetPlayerCount,
       createdAt: timestamp,
       updatedAt: timestamp,
-      seats: [seat]
+      seats: [seat],
+      chatMessages: [this.createSystemChatMessage(`${seat.name} 创建了房间。`, timestamp)]
     };
     await this.store.saveRoom(room);
     return { room, seat };
@@ -74,6 +77,10 @@ export class OnlineRoomService {
             seat.playerId === disconnectedSeat.playerId
               ? { ...seat, connected: true, lastSeenAt: timestamp, sessionToken }
               : seat
+          ),
+          chatMessages: this.appendChatMessage(
+            room,
+            this.createSystemChatMessage(`${disconnectedSeat.name} 重新接入了房间。`, timestamp)
           )
         };
         await transaction.saveRoom(nextRoom);
@@ -95,7 +102,8 @@ export class OnlineRoomService {
       const nextRoom: StoredOnlineRoom = {
         ...room,
         updatedAt: timestamp,
-        seats: [...room.seats, seat]
+        seats: [...room.seats, seat],
+        chatMessages: this.appendChatMessage(room, this.createSystemChatMessage(`${seat.name} 加入了房间。`, timestamp))
       };
       await transaction.saveRoom(nextRoom);
       return { room: nextRoom, seat };
@@ -226,6 +234,48 @@ export class OnlineRoomService {
     });
   }
 
+  async sendChatMessage(input: {
+    roomCode: string;
+    viewerPlayerId: string;
+    text: string;
+  }): Promise<StoredOnlineRoom> {
+    return this.withRoomLock(input.roomCode, async (transaction) => {
+      const room = await this.getRoomOrThrowFrom(transaction, input.roomCode);
+      if (room.status !== "lobby") {
+        throw new OnlineRoomError("只有在房间大厅里才能发送聊天消息。");
+      }
+
+      const seat = room.seats.find((entry) => entry.playerId === input.viewerPlayerId);
+      if (!seat) {
+        throw new OnlineRoomError("没有在这个房间里找到你的玩家席位。");
+      }
+
+      const text = normalizeChatMessage(input.text);
+      if (!text) {
+        throw new OnlineRoomError("请输入聊天内容。");
+      }
+
+      const timestamp = this.now();
+      const nextRoom: StoredOnlineRoom = {
+        ...room,
+        updatedAt: timestamp,
+        seats: room.seats.map((entry) =>
+          entry.playerId === seat.playerId ? { ...entry, lastSeenAt: timestamp } : entry
+        ),
+        chatMessages: this.appendChatMessage(room, {
+          id: crypto.randomUUID(),
+          kind: "player",
+          playerId: seat.playerId,
+          playerName: seat.name,
+          text,
+          createdAt: timestamp
+        })
+      };
+      await transaction.saveRoom(nextRoom);
+      return nextRoom;
+    });
+  }
+
   async returnToLobby(input: {
     roomCode: string;
     viewerPlayerId: string;
@@ -312,7 +362,11 @@ export class OnlineRoomService {
         ...room,
         hostPlayerId: room.hostPlayerId === input.playerId ? nextSeats[0].playerId : room.hostPlayerId,
         updatedAt: timestamp,
-        seats: nextSeats
+        seats: nextSeats,
+        chatMessages: this.appendChatMessage(
+          room,
+          this.createSystemChatMessage(`${room.seats.find((seat) => seat.playerId === input.playerId)?.name ?? "玩家"} 离开了房间。`, timestamp)
+        )
       };
       await transaction.saveRoom(nextRoom);
       return nextRoom;
@@ -388,6 +442,19 @@ export class OnlineRoomService {
     return nextRoom;
   }
 
+  private appendChatMessage(room: StoredOnlineRoom, message: NonNullable<StoredOnlineRoom["chatMessages"]>[number]) {
+    return [...(room.chatMessages ?? []), message].slice(-MAX_CHAT_MESSAGES);
+  }
+
+  private createSystemChatMessage(text: string, timestamp: number) {
+    return {
+      id: crypto.randomUUID(),
+      kind: "system" as const,
+      text,
+      createdAt: timestamp
+    };
+  }
+
   private async withRoomLock<T>(roomCode: string, task: (transaction: RoomStoreTransaction) => Promise<T>): Promise<T> {
     const previous = this.roomLocks.get(roomCode) ?? Promise.resolve();
     let release!: () => void;
@@ -429,6 +496,10 @@ function nextSeatIndex(seats: StoredRoomSeat[]) {
 
 function normalizePlayerName(name: string) {
   return name.trim();
+}
+
+function normalizeChatMessage(text: string) {
+  return text.replace(/\s+/g, " ").trim().slice(0, MAX_CHAT_MESSAGE_LENGTH);
 }
 
 function findDisconnectedSeatByName(seats: StoredRoomSeat[], name: string) {

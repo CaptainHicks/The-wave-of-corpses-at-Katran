@@ -1,5 +1,5 @@
 import { Compass, Flag, Menu, PauseCircle, Skull, X } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type Dispatch, type SetStateAction } from "react";
 import { createPortal } from "react-dom";
 import type { Command, GameState, RouteType } from "../../domain/types";
 import { RESOURCES, RESOURCE_LABELS } from "../../domain/constants";
@@ -330,7 +330,7 @@ function TurnTimerPanel({
       </div>
       <p>{activePlayerName ?? "当前玩家"} 超时后系统自动托管。</p>
       <div className="turn-timer-track" aria-hidden="true">
-        <i style={{ width: `${progress * 100}%` }} />
+        <i style={{ "--turn-timer-progress": progress } as CSSProperties} />
       </div>
     </section>
   );

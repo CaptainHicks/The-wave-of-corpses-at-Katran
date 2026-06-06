@@ -313,6 +313,7 @@ function App() {
           onCreateRoom: (payload) => onlineSession.createRoom(payload),
           onJoinRoom: (payload) => onlineSession.joinRoom(payload),
           onChooseFaction: (payload) => onlineSession.chooseFaction(payload),
+          onSendChatMessage: (payload) => onlineSession.sendChatMessage(payload),
           onStartRoom: () => {
             if (!onlineSession.lobbyView) return;
             void onlineSession.startRoom({ roomCode: onlineSession.lobbyView.roomMeta.roomCode });

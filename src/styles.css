@@ -3318,7 +3318,8 @@ textarea {
   padding: 0.5cqw 0.75cqw;
   border: 1px solid rgba(190, 145, 91, 0.28);
   background: rgba(5, 7, 6, 0.48);
-  overflow: hidden;
+  overflow: auto;
+  scrollbar-width: thin;
 }
 
 .start-lobby-chat-log p {
@@ -3326,6 +3327,31 @@ textarea {
   color: rgba(234, 213, 182, 0.76);
   font-size: 0.7cqw;
   font-weight: 800;
+}
+
+.start-lobby-chat-message {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.42;
+}
+
+.start-lobby-chat-message.player {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.35cqw;
+}
+
+.start-lobby-chat-message.player strong {
+  color: #e9c47c;
+  font-weight: 950;
+}
+
+.start-lobby-chat-message.player strong::after {
+  content: "：";
+}
+
+.start-lobby-chat-message.system {
+  color: rgba(234, 213, 182, 0.62);
 }
 
 .start-lobby-chat-input {
@@ -3359,6 +3385,13 @@ textarea {
   background: rgba(9, 10, 9, 0.82);
   font-size: 0.82cqw;
   font-weight: 950;
+}
+
+.start-lobby-chat-input button:disabled {
+  cursor: not-allowed;
+  color: rgba(232, 195, 124, 0.42);
+  border-color: rgba(190, 145, 91, 0.2);
+  background: rgba(9, 10, 9, 0.48);
 }
 
 .start-lobby-factions-card {
@@ -4843,10 +4876,12 @@ textarea {
 
 .turn-timer-track i {
   display: block;
+  width: 100%;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #407d4a, #d6a13a, #b94b36);
-  transition: width 180ms linear;
+  background: linear-gradient(90deg, #b94b36, #d6a13a, #407d4a);
+  clip-path: inset(0 calc((1 - var(--turn-timer-progress, 1)) * 100%) 0 0);
+  transition: clip-path 180ms linear;
 }
 
 .action-card {
@@ -5680,6 +5715,108 @@ textarea {
   line-height: 1.2;
 }
 
+.online-turn-reminder {
+  --online-turn-reminder-duration: 2600ms;
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-modal) + 3);
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.online-turn-reminder__flare {
+  position: absolute;
+  width: 680px;
+  height: 160px;
+  border-top: 1px solid rgba(255, 224, 154, 0.18);
+  border-bottom: 1px solid rgba(255, 224, 154, 0.12);
+  background:
+    linear-gradient(90deg, transparent, rgba(75, 121, 99, 0.42) 18%, rgba(255, 216, 126, 0.24) 50%, rgba(75, 121, 99, 0.42) 82%, transparent),
+    repeating-linear-gradient(0deg, rgba(255, 236, 184, 0.1), rgba(255, 236, 184, 0.1) 1px, transparent 1px, transparent 9px);
+  opacity: 0;
+  transform: skewX(-10deg) scaleX(0.34);
+  animation: onlineTurnReminderFlare var(--online-turn-reminder-duration) ease-out forwards;
+}
+
+.online-turn-reminder__panel {
+  position: relative;
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+  min-width: 390px;
+  max-width: 520px;
+  padding: 18px 24px;
+  border: 1px solid rgba(255, 224, 154, 0.52);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(20, 40, 32, 0.96), rgba(68, 70, 30, 0.92) 52%, rgba(18, 17, 13, 0.96)),
+    repeating-linear-gradient(90deg, rgba(255, 235, 180, 0.07), rgba(255, 235, 180, 0.07) 1px, transparent 1px, transparent 16px);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.68),
+    0 18px 48px rgba(0, 0, 0, 0.52),
+    inset 0 0 36px rgba(255, 196, 88, 0.12);
+  opacity: 0;
+  transform: translateY(18px) scale(0.88);
+  animation: onlineTurnReminderPanel var(--online-turn-reminder-duration) cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.online-turn-reminder__panel::before,
+.online-turn-reminder__panel::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(255, 223, 159, 0.78), transparent);
+}
+
+.online-turn-reminder__panel::before {
+  top: -5px;
+}
+
+.online-turn-reminder__panel::after {
+  bottom: -5px;
+}
+
+.online-turn-reminder__panel svg {
+  justify-self: center;
+  color: #f2c14e;
+  filter: drop-shadow(0 0 14px rgba(255, 205, 118, 0.36));
+  animation: onlineTurnReminderIcon var(--online-turn-reminder-duration) ease-out forwards;
+}
+
+.online-turn-reminder__panel span {
+  display: block;
+  color: #f2c14e;
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.online-turn-reminder__panel strong {
+  display: block;
+  margin-top: 5px;
+  color: #fff4d2;
+  font-size: 40px;
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: 0;
+  text-shadow:
+    0 3px 0 rgba(0, 0, 0, 0.5),
+    0 0 18px rgba(242, 193, 78, 0.62);
+}
+
+.online-turn-reminder__panel p {
+  margin: 8px 0 0;
+  color: rgba(255, 237, 200, 0.9);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
 .game-viewport {
   position: relative;
   width: 100vw;
@@ -5835,18 +5972,26 @@ textarea {
   left: 50%;
   top: 50%;
   z-index: 1;
-  display: grid;
-  place-items: center;
   width: 190%;
   height: 176%;
-  transform: translate(calc(-50% + var(--map-pan-x)), calc(-50% + var(--map-pan-y))) scale(var(--map-scale));
+  backface-visibility: hidden;
+  transform: translate3d(-50%, -50%, 0);
   transform-origin: center;
-  transition: transform 160ms ease;
+  transition: none;
   will-change: transform;
 }
 
-.map-layer.is-panning .map-world {
-  transition: none;
+.map-scale-world {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  contain: layout paint style;
+  backface-visibility: hidden;
+  transform: scale(0.7);
+  transform-origin: center;
+  transition: transform 160ms ease;
+  will-change: transform;
 }
 
 .map-battlefield {
@@ -8676,7 +8821,7 @@ textarea {
     inset 0 0 0 1px rgba(255, 244, 204, 0.08);
 }
 
-.score-detail-header {
+.score-detail-modal .score-detail-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto 34px;
   align-items: center;
@@ -8688,14 +8833,18 @@ textarea {
     linear-gradient(90deg, color-mix(in srgb, var(--player-color) 20%, transparent), transparent 58%);
 }
 
-.score-detail-kicker {
+.score-detail-modal .score-detail-header > div {
+  min-width: 0;
+}
+
+.score-detail-modal .score-detail-kicker {
   display: block;
   color: #c8a25e;
   font-size: 11px;
   font-weight: 950;
 }
 
-.score-detail-header h2 {
+.score-detail-modal .score-detail-header h2 {
   margin: 2px 0 0;
   overflow: hidden;
   color: #f7e7bf;
@@ -8706,7 +8855,7 @@ textarea {
   white-space: nowrap;
 }
 
-.score-detail-total {
+.score-detail-modal .score-detail-total {
   display: grid;
   place-items: center;
   min-width: 88px;
@@ -8718,6 +8867,7 @@ textarea {
   color: #fff0c8;
   font-size: 18px;
   font-weight: 950;
+  white-space: nowrap;
 }
 
 .score-detail-modal .modal-close-button {
@@ -8754,6 +8904,11 @@ textarea {
     linear-gradient(90deg, color-mix(in srgb, var(--player-color) 16%, transparent), rgba(255, 247, 222, 0.06));
 }
 
+.score-detail-row > div {
+  min-width: 0;
+  overflow: hidden;
+}
+
 .score-detail-row strong,
 .score-detail-row span {
   display: block;
@@ -8768,12 +8923,16 @@ textarea {
 
 .score-detail-row span {
   margin-top: 3px;
+  overflow: hidden;
   color: rgba(234, 223, 196, 0.72);
   font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .score-detail-row b {
   display: grid;
+  justify-self: end;
   place-items: center;
   width: 42px;
   height: 34px;
@@ -8782,6 +8941,7 @@ textarea {
   color: #ffe2a2;
   font-size: 17px;
   font-weight: 950;
+  white-space: nowrap;
 }
 
 .victory-settlement-layer {
@@ -8904,6 +9064,7 @@ textarea {
   color: #fff0c8;
   font-size: 24px;
   font-weight: 950;
+  white-space: nowrap;
 }
 
 .victory-standings {
@@ -8976,6 +9137,7 @@ textarea {
 
 .victory-standing-row > b {
   display: grid;
+  justify-self: end;
   place-items: center;
   min-width: 76px;
   height: 38px;
@@ -8985,6 +9147,7 @@ textarea {
   color: #ffe2a2;
   font-size: 15px;
   font-weight: 950;
+  white-space: nowrap;
 }
 
 .victory-return-button {
@@ -9510,6 +9673,56 @@ textarea {
   }
   14% {
     transform: rotate(3deg) scale(1.08);
+  }
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+}
+
+@keyframes onlineTurnReminderPanel {
+  0% {
+    opacity: 0;
+    transform: translateY(24px) scale(0.84);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(0) scale(1.04);
+  }
+  80% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.94);
+  }
+}
+
+@keyframes onlineTurnReminderFlare {
+  0% {
+    opacity: 0;
+    transform: skewX(-10deg) scaleX(0.34);
+  }
+  14% {
+    opacity: 0.78;
+    transform: skewX(-10deg) scaleX(1);
+  }
+  80% {
+    opacity: 0.42;
+    transform: skewX(-10deg) scaleX(1.05);
+  }
+  100% {
+    opacity: 0;
+    transform: skewX(-10deg) scaleX(1.2);
+  }
+}
+
+@keyframes onlineTurnReminderIcon {
+  0% {
+    transform: rotate(-8deg) scale(0.74);
+  }
+  14% {
+    transform: rotate(4deg) scale(1.08);
   }
   100% {
     transform: rotate(0deg) scale(1);

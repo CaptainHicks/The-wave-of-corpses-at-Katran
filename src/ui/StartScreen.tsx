@@ -29,6 +29,7 @@ import { PIECE_LIMITS, PLAYER_FACTIONS, VICTORY_POINTS_TO_WIN } from "../domain/
 import type { Command } from "../domain/types";
 import type {
   LobbyView,
+  RoomChatRequest,
   RoomChooseFactionRequest,
   RoomCreateRequest,
   RoomJoinRequest
@@ -48,6 +49,7 @@ interface OnlineStartScreenProps {
   onCreateRoom: (payload: RoomCreateRequest) => void | Promise<unknown>;
   onJoinRoom: (payload: RoomJoinRequest) => void | Promise<unknown>;
   onChooseFaction: (payload: RoomChooseFactionRequest) => void | Promise<unknown>;
+  onSendChatMessage: (payload: RoomChatRequest) => void | Promise<unknown>;
   onStartRoom: () => void;
   onLeaveRoom: () => void;
   onDismissError: () => void;
@@ -128,6 +130,10 @@ function normalizeRoomCode(value: string) {
   return value.replace(/[^a-z0-9]/gi, "").toUpperCase();
 }
 
+function isFailedOnlineActionResult(result: unknown) {
+  return Boolean(result && typeof result === "object" && "ok" in result && result.ok === false);
+}
+
 function getStartStageScale() {
   if (typeof window === "undefined") return 1;
   return Math.max(0.01, Math.min(window.innerWidth / START_STAGE_WIDTH, window.innerHeight / START_STAGE_HEIGHT));
@@ -151,9 +157,11 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
   const [onlineTargetCount, setOnlineTargetCount] = useState(2);
   const [onlineFogEnabled, setOnlineFogEnabled] = useState(false);
   const [joinRoomCode, setJoinRoomCode] = useState("");
+  const [lobbyChatDraft, setLobbyChatDraft] = useState("");
   const [onlineSetupMode, setOnlineSetupMode] = useState<OnlineSetupMode>("select");
   const [activeRuleSectionId, setActiveRuleSectionId] = useState<RuleSectionId>("rules-overview");
   const joinRoomCodeInputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const lobbyChatLogRef = useRef<HTMLDivElement | null>(null);
   const rulesScrollRef = useRef<HTMLElement | null>(null);
   const stageStyle = {
     "--start-stage-scale": stageScale
@@ -161,6 +169,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
   const normalizedJoinRoomCode = normalizeRoomCode(joinRoomCode.trim());
   const normalizedOnlineHostName = onlineHostName.trim();
   const normalizedOnlineJoinName = onlineJoinName.trim();
+  const normalizedLobbyChatDraft = lobbyChatDraft.trim();
   const selectedLocalFactionIds = localFactionIds.slice(0, count);
   const canCreateLocalGame = selectedLocalFactionIds.every(Boolean);
 
@@ -178,6 +187,13 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
   useEffect(() => {
     preloadGameArtAssets();
   }, []);
+
+  useEffect(() => {
+    if (!online?.lobbyView) return;
+    const chatLog = lobbyChatLogRef.current;
+    if (!chatLog) return;
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }, [online?.lobbyView?.chatMessages.length]);
 
   const updateLocalFaction = (index: number, factionId: string) => {
     const previousFaction = findFactionById(localFactionIds[index]);
@@ -1241,7 +1257,28 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
     const filledSeats = lobbyView.seats.length;
     const isHost = lobbyView.viewerPlayerId === lobbyView.roomMeta.hostPlayerId;
     const hostSeat = lobbyView.seats.find((seat) => seat.playerId === lobbyView.roomMeta.hostPlayerId);
-    const systemMessages = lobbyView.seats.slice(1, 4).map((seat) => `【系统】${seat.name} 加入了房间`);
+    const chatMessages = lobbyView.chatMessages.length > 0
+      ? lobbyView.chatMessages
+      : [{
+          id: "empty-lobby",
+          kind: "system" as const,
+          text: "房间已创建，等待玩家加入。",
+          createdAt: lobbyView.roomMeta.connectedPlayerIds.length
+        }];
+    const sendLobbyChatMessage = () => {
+      const text = normalizedLobbyChatDraft;
+      if (!text || online.busy) return;
+      void Promise.resolve(online.onSendChatMessage({ roomCode: lobbyView.roomMeta.roomCode, text }))
+        .then((result) => {
+          if (isFailedOnlineActionResult(result)) return;
+          setLobbyChatDraft("");
+        });
+    };
+    const handleLobbyChatKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+      event.preventDefault();
+      sendLobbyChatMessage();
+    };
 
     return (
       <div className="start-lobby-screen">
@@ -1379,15 +1416,36 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
               <UserPlus size={20} />
               邀请好友
             </button>
-            <div className="start-lobby-chat-log" aria-label="房间聊天记录">
-              {(systemMessages.length > 0 ? systemMessages : ["【系统】房间已创建，等待玩家加入"]).map((message) => (
-                <p key={message}>{message}</p>
+            <div className="start-lobby-chat-log" aria-label="房间聊天记录" ref={lobbyChatLogRef}>
+              {chatMessages.map((message) => (
+                <p
+                  key={message.id}
+                  className={message.kind === "player" ? "start-lobby-chat-message player" : "start-lobby-chat-message system"}
+                >
+                  {message.kind === "player" ? (
+                    <>
+                      <strong>{message.playerName ?? "玩家"}</strong>
+                      <span>{message.text}</span>
+                    </>
+                  ) : (
+                    <span>【系统】{message.text}</span>
+                  )}
+                </p>
               ))}
             </div>
             <div className="start-lobby-chat-input">
-              <input aria-label="房间聊天内容" placeholder="点击输入聊天内容…" />
+              <input
+                aria-label="房间聊天内容"
+                placeholder="点击输入聊天内容…"
+                maxLength={160}
+                value={lobbyChatDraft}
+                onChange={(event) => setLobbyChatDraft(event.target.value)}
+                onKeyDown={handleLobbyChatKeyDown}
+              />
               <Smile size={20} aria-hidden="true" />
-              <button type="button">发送</button>
+              <button type="button" disabled={!normalizedLobbyChatDraft || online.busy} onClick={sendLobbyChatMessage}>
+                发送
+              </button>
             </div>
           </section>
 

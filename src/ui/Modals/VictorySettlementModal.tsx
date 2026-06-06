@@ -35,7 +35,7 @@ export function VictorySettlementModal({
             <Crown size={34} />
           </span>
           <span className="victory-kicker">冠军</span>
-          <h2>{champion.player.name}</h2>
+          <h2 title={champion.player.name}>{champion.player.name}</h2>
           <p>尸潮暂退，废土归于新的领袖。</p>
           <strong>{champion.score.total} 分</strong>
         </div>
@@ -76,7 +76,7 @@ function StandingRow({
     >
       <span className="victory-rank">{champion ? <Trophy size={18} /> : `#${rank}`}</span>
       <div className="victory-player-copy">
-        <strong>{standing.player.name}</strong>
+        <strong title={standing.player.name}>{standing.player.name}</strong>
         <span>{scoreSummary(standing.score)}</span>
       </div>
       <b>总分 {standing.score.total}</b>

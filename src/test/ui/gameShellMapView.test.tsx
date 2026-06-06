@@ -1,4 +1,4 @@
-import { fireEvent, render } from "@testing-library/react";
+import { fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyCommand } from "../../domain/rules";
 import { GameShell } from "../../ui/GameShell";
@@ -66,8 +66,21 @@ function renderGameShellWithSiegeAlert() {
   );
 }
 
-function numericStylePx(element: HTMLElement, property: string) {
-  return Number.parseFloat(element.style.getPropertyValue(property));
+function readMapPanTransform(element: HTMLElement) {
+  const match = element.style.transform.match(
+    /^translate3d\(calc\(-50% \+ (-?\d+(?:\.\d+)?)px\), calc\(-50% \+ (-?\d+(?:\.\d+)?)px\), 0\)$/
+  );
+  if (!match) throw new Error(`Unexpected map transform: ${element.style.transform}`);
+  return {
+    x: Number.parseFloat(match[1]),
+    y: Number.parseFloat(match[2])
+  };
+}
+
+function readMapScaleTransform(element: HTMLElement) {
+  const match = element.style.transform.match(/^scale\((-?\d+(?:\.\d+)?)\)$/);
+  if (!match) throw new Error(`Unexpected map scale transform: ${element.style.transform}`);
+  return Number.parseFloat(match[1]);
 }
 
 function dispatchPointerEvent(
@@ -163,32 +176,46 @@ describe("GameShell map view", () => {
 
     const { container } = renderGameShell();
     const shell = container.querySelector(".game-shell") as HTMLElement;
-    const world = container.querySelector(".map-world") as HTMLElement;
+    const scaleWorld = container.querySelector(".map-scale-world") as HTMLElement;
 
-    expect(world.style.getPropertyValue("--map-scale")).toBe("0.7");
+    expect(readMapScaleTransform(scaleWorld)).toBe(0.7);
     expect(shell.style.getPropertyValue("--touch-target-min")).toBe("");
   });
 
-  it("keeps the panned viewport center anchored when zooming", () => {
+  it("keeps the panned viewport center anchored when zooming", async () => {
     const { container } = renderGameShell();
     const layer = container.querySelector(".map-layer") as HTMLElement;
     const world = container.querySelector(".map-world") as HTMLElement;
+    const scaleWorld = container.querySelector(".map-scale-world") as HTMLElement;
 
     dispatchPointerEvent(layer, "pointerdown", { pointerId: 1, button: 0, clientX: 500, clientY: 300 });
     dispatchPointerEvent(layer, "pointermove", { pointerId: 1, buttons: 1, clientX: 640, clientY: 380 });
 
-    expect(numericStylePx(world, "--map-pan-x")).toBeCloseTo(140);
-    expect(numericStylePx(world, "--map-pan-y")).toBeCloseTo(80);
+    await waitFor(() => expect(readMapPanTransform(world).x).toBeCloseTo(140));
+    expect(readMapPanTransform(world).y).toBeCloseTo(80);
 
-    fireEvent.wheel(layer, { deltaY: -1 });
+    fireEvent.wheel(layer, { deltaY: -100 });
 
     const zoomRatio = 0.88 / 0.7;
-    expect(world.style.getPropertyValue("--map-scale")).toBe("0.88");
-    expect(numericStylePx(world, "--map-pan-x")).toBeCloseTo(140 * zoomRatio);
-    expect(numericStylePx(world, "--map-pan-y")).toBeCloseTo(80 * zoomRatio);
+    await waitFor(() => expect(readMapScaleTransform(scaleWorld)).toBe(0.88));
+    expect(readMapPanTransform(world).x).toBeCloseTo(140 * zoomRatio);
+    expect(readMapPanTransform(world).y).toBeCloseTo(80 * zoomRatio);
   });
 
-  it("converts pointer movement back into fixed stage coordinates after scaling", () => {
+  it("coalesces small wheel deltas into one proportional zoom update", async () => {
+    const { container } = renderGameShell();
+    const layer = container.querySelector(".map-layer") as HTMLElement;
+    const scaleWorld = container.querySelector(".map-scale-world") as HTMLElement;
+
+    fireEvent.wheel(layer, { deltaY: -10 });
+    fireEvent.wheel(layer, { deltaY: -10 });
+    fireEvent.wheel(layer, { deltaY: -10 });
+    fireEvent.wheel(layer, { deltaY: -10 });
+
+    await waitFor(() => expect(readMapScaleTransform(scaleWorld)).toBe(0.77));
+  });
+
+  it("converts pointer movement back into fixed stage coordinates after scaling", async () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 836 });
     Object.defineProperty(window, "innerHeight", { configurable: true, value: 470.5 });
 
@@ -202,8 +229,8 @@ describe("GameShell map view", () => {
     dispatchPointerEvent(layer, "pointerdown", { pointerId: 1, button: 0, clientX: 100, clientY: 100 });
     dispatchPointerEvent(layer, "pointermove", { pointerId: 1, buttons: 1, clientX: 170, clientY: 140 });
 
-    expect(numericStylePx(world, "--map-pan-x")).toBeCloseTo(140);
-    expect(numericStylePx(world, "--map-pan-y")).toBeCloseTo(80);
+    await waitFor(() => expect(readMapPanTransform(world).x).toBeCloseTo(140));
+    expect(readMapPanTransform(world).y).toBeCloseTo(80);
   });
 
   it("does not turn tiny tap jitter into a map pan after stage scaling", () => {
@@ -217,23 +244,24 @@ describe("GameShell map view", () => {
     dispatchPointerEvent(layer, "pointerdown", { pointerId: 1, button: 0, clientX: 100, clientY: 100 });
     dispatchPointerEvent(layer, "pointermove", { pointerId: 1, buttons: 1, clientX: 104, clientY: 100 });
 
-    expect(numericStylePx(world, "--map-pan-x")).toBeCloseTo(0);
-    expect(numericStylePx(world, "--map-pan-y")).toBeCloseTo(0);
+    expect(readMapPanTransform(world).x).toBeCloseTo(0);
+    expect(readMapPanTransform(world).y).toBeCloseTo(0);
   });
 
-  it("supports pinch zoom and two-finger panning on touch devices", () => {
+  it("supports pinch zoom and two-finger panning on touch devices", async () => {
     const { container } = renderGameShell();
     const layer = container.querySelector(".map-layer") as HTMLElement;
     const world = container.querySelector(".map-world") as HTMLElement;
+    const scaleWorld = container.querySelector(".map-scale-world") as HTMLElement;
 
     dispatchPointerEvent(layer, "pointerdown", { pointerId: 1, clientX: 400, clientY: 300, pointerType: "touch" });
     dispatchPointerEvent(layer, "pointerdown", { pointerId: 2, clientX: 600, clientY: 300, pointerType: "touch" });
     dispatchPointerEvent(layer, "pointermove", { pointerId: 1, clientX: 450, clientY: 300, pointerType: "touch" });
     dispatchPointerEvent(layer, "pointermove", { pointerId: 2, clientX: 750, clientY: 380, pointerType: "touch" });
 
-    expect(Number.parseFloat(world.style.getPropertyValue("--map-scale"))).toBeCloseTo(1.09, 2);
-    expect(numericStylePx(world, "--map-pan-x")).toBeCloseTo(100, 0);
-    expect(numericStylePx(world, "--map-pan-y")).toBeCloseTo(40, 0);
+    await waitFor(() => expect(readMapScaleTransform(scaleWorld)).toBeCloseTo(1.09, 2));
+    expect(readMapPanTransform(world).x).toBeCloseTo(100, 0);
+    expect(readMapPanTransform(world).y).toBeCloseTo(40, 0);
   });
 
   it("shows a temporary centered zombie siege alert", () => {

@@ -13,6 +13,15 @@ export interface StoredRoomSeat {
   lastSeenAt: number;
 }
 
+export interface StoredLobbyChatMessage {
+  id: string;
+  kind: "system" | "player";
+  playerId?: string;
+  playerName?: string;
+  text: string;
+  createdAt: number;
+}
+
 export interface StoredOnlineRoom {
   roomCode: string;
   hostPlayerId: string;
@@ -22,6 +31,7 @@ export interface StoredOnlineRoom {
   createdAt: number;
   updatedAt: number;
   seats: StoredRoomSeat[];
+  chatMessages?: StoredLobbyChatMessage[];
   gameState?: GameState;
   lastCommand?: Command;
 }
