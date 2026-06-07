@@ -127,6 +127,14 @@ function formatMapTransformNumber(value: number) {
   return Number(value.toFixed(3)).toString();
 }
 
+function buildOnlineTurnReminderKey(state: GameState, playerId: string, onlineRoomCode?: string) {
+  const scope =
+    state.phase === "setup"
+      ? `setup:${state.setup.round}:${state.setup.placementIndex}`
+      : `turn:${state.turn}`;
+  return `${onlineRoomCode ?? "room"}:${scope}:${playerId}`;
+}
+
 function buildMapTransform(view: MapViewState) {
   return `translate3d(calc(-50% + ${formatMapTransformNumber(view.x)}px), calc(-50% + ${formatMapTransformNumber(
     view.y
@@ -183,8 +191,9 @@ export function GameShell({
   const onlineTurnReminderPlayerName = onlineTurnReminderPlayer?.name;
   const onlineTurnReminderKey =
     interactionMode === "online" && mode !== "victory" && activeTimerPlayerId === viewerPlayerId && onlineTurnReminderPlayer
-      ? [state.turn, activeTimerPlayerId, state.pending?.kind ?? "turn"].join(":")
+      ? buildOnlineTurnReminderKey(state, activeTimerPlayerId, onlineRoomCode)
       : undefined;
+  const shownOnlineTurnReminderKeysRef = useRef<Set<string>>(new Set());
   const submittedTimeoutKeyRef = useRef<string>();
   const submitRef = useRef(submit);
   const [stageScale, setStageScale] = useState(getStageScale);
@@ -484,6 +493,8 @@ export function GameShell({
       setVisibleOnlineTurnReminder(undefined);
       return;
     }
+    if (shownOnlineTurnReminderKeysRef.current.has(onlineTurnReminderKey)) return;
+    shownOnlineTurnReminderKeysRef.current.add(onlineTurnReminderKey);
 
     setVisibleOnlineTurnReminder({
       key: onlineTurnReminderKey,
@@ -497,7 +508,7 @@ export function GameShell({
     }, ONLINE_TURN_REMINDER_VISIBLE_MS);
 
     return () => window.clearTimeout(timerId);
-  }, [onlineTurnReminderKey, onlineTurnReminderPlayerName, state.pending?.kind, state.turn]);
+  }, [onlineTurnReminderKey, onlineTurnReminderPlayerName]);
 
   useEffect(() => {
     if (!operationHint) {
@@ -615,7 +626,6 @@ export function GameShell({
           <div className="map-world" ref={mapWorldRef}>
             <div className="map-scale-world" ref={mapScaleWorldRef}>
               <div className="map-battlefield" aria-hidden="true" />
-              <div className="map-center-zone" aria-hidden="true" />
               <div className="map-board-frame">
                 <BoardView
                   state={state}

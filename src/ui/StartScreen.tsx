@@ -109,7 +109,8 @@ const RULE_SECTIONS = [
   { id: "rules-goal", label: "游戏目标" },
   { id: "rules-turn", label: "回合流程" },
   { id: "rules-resources", label: "资源与建造" },
-  { id: "rules-horde", label: "尸潮与民兵" },
+  { id: "rules-horde", label: "尸潮来袭与围城" },
+  { id: "rules-militia", label: "民兵规则" },
   { id: "rules-fog", label: "探索与迷雾" },
   { id: "rules-cards", label: "交易与发展卡" },
   { id: "rules-victory", label: "胜利与失败" },
@@ -660,7 +661,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
             <ol className="start-rules-timeline">
               <li><strong>准备阶段</strong><span>重置本回合状态，确认民兵防线、发展卡和车队行动。</span></li>
               <li><strong>掷骰阶段</strong><span>掷两颗六面骰。非 7 点时，对应数字地块为相邻建筑产出资源。</span></li>
-              <li><strong>尸潮阶段</strong><span>如果掷出 7，检查弃牌、移动尸潮、抽取资源，并推进尸潮进度。</span></li>
+              <li><strong>尸潮来袭</strong><span>如果掷出 7，检查弃牌、移动尸潮标志、封锁地块、抽取相邻玩家资源，并推进尸潮围城进度。</span></li>
               <li><strong>交易阶段</strong><span>可以与其他玩家交易，也可以按银行、黑市或商人的比例换资源。</span></li>
               <li><strong>建造阶段</strong><span>支付资源建造运输线、装甲车队、营地、堡垒、哨塔、民兵或发展卡。</span></li>
               <li><strong>行动阶段</strong><span>使用已激活民兵驱逐尸潮，或打出本回合允许使用的发展卡。</span></li>
@@ -713,37 +714,69 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
           <article id="rules-horde" className="start-rules-section">
             <div className="start-rules-section-title">
               <span className="start-rules-kicker">05 / 威胁</span>
-              <h3>尸潮与民兵</h3>
-              <p>尸潮是整局最危险的压力源。它会封锁资源、推进围城，并迫使玩家共同承担防线后果。</p>
+              <h3>尸潮来袭与尸潮围城</h3>
+              <p>尸潮来袭是掷出 7 后移动尸潮标志并封锁资源的即时事件；尸潮围城则在尸潮围城进度达到 6 时，按全场堡垒与已激活民兵进行防御结算。</p>
             </div>
             <div className="start-rules-split">
               <div className="start-rules-warning-card">
                 <Bug size={34} />
-                <strong>尸潮什么时候变强？</strong>
+                <strong>尸潮来袭：掷出 7</strong>
                 <ul>
-                  <li>掷出 7：尸潮进度 +1。</li>
-                  <li>探索翻出感染区：尸潮进度 +1。</li>
-                  <li>使用尸潮逼近发展卡：尸潮进度 +1。</li>
-                  <li>进度达到 6 格时，立即触发尸潮围城。</li>
+                  <li>手牌超过上限的玩家先弃掉一半资源。</li>
+                  <li>当前玩家将尸潮标志移动到任意已翻开的地块。</li>
+                  <li>尸潮标志所在的地块被占领，骰子命中时也不能产出资源。</li>
+                  <li>若该地块相邻其他玩家建筑，当前玩家可以选择其中一名玩家并随机抽取 1 张资源。</li>
+                  <li>每次尸潮来袭同时使尸潮围城进度 +1。</li>
                 </ul>
               </div>
               <div className="start-rules-warning-card">
                 <Shield size={34} />
-                <strong>围城怎么结算？</strong>
+                <strong>尸潮围城：进度达到 6</strong>
                 <ul>
+                  <li>掷出 7、探索翻出感染区或使用“尸潮逼近”发展卡，都会使尸潮围城进度 +1。</li>
                   <li>尸潮强度等于全场堡垒总数。</li>
                   <li>全体防御值等于所有已激活民兵数量。</li>
-                  <li>防御值足够则防守成功，贡献最高者可能获得卡坦保卫者。</li>
-                  <li>防守失败时，拥有堡垒且防御最弱的玩家会将堡垒降级。</li>
+                  <li>防御值不低于尸潮强度则成功；单独贡献最高者获得卡坦保卫者，最高贡献并列者各获得 1 张发展卡。</li>
+                  <li>防御值不足则失败；拥有堡垒且已激活民兵最少的玩家，各将 1 座堡垒降级为营地。</li>
+                  <li>结算后尸潮围城进度归零，所有民兵变为未激活状态。</li>
                 </ul>
               </div>
             </div>
-            <p className="start-rules-note">民兵必须驻守在自己的营地或堡垒上，每个建筑最多 2 个。刚激活的民兵本回合不能主动行动，但会参与尸潮围城防御。</p>
+          </article>
+
+          <article id="rules-militia" className="start-rules-section">
+            <div className="start-rules-section-title">
+              <span className="start-rules-kicker">06 / 防线</span>
+              <h3>民兵规则</h3>
+              <p>民兵是尸潮围城防御值的主要来源，也是能够主动移动和驱逐尸潮的战术单位。征召、激活和主动行动是三个不同步骤。</p>
+            </div>
+            <div className="start-rules-card-grid two">
+              <div className="start-rules-card">
+                <Users size={30} />
+                <strong>民兵：征召与驻守</strong>
+                <ul>
+                  <li>征召 1 个民兵需要支付金属 ×1、弹药 ×1；征召完成时为未激活状态。</li>
+                  <li>民兵必须驻守在自己的营地或堡垒，每座建筑最多驻守 2 个民兵。</li>
+                  <li>未激活民兵不能提供尸潮围城防御值，也不能移动或驱逐尸潮。</li>
+                </ul>
+              </div>
+              <div className="start-rules-card">
+                <Radio size={30} />
+                <strong>民兵：激活与主动行动</strong>
+                <ul>
+                  <li>支付食物 ×1 激活 1 个民兵。本回合刚激活的民兵会立即计入围城防御值。</li>
+                  <li>刚激活的民兵必须等到自己的下一个回合，才能移动或驱逐尸潮。</li>
+                  <li>移动只能沿己方路线前往己方建筑；驱逐要求民兵所在建筑与尸潮地块相邻。</li>
+                  <li>民兵完成移动或驱逐后，会重新变为未激活状态。</li>
+                </ul>
+              </div>
+            </div>
+            <p className="start-rules-note">关键区别：本回合刚激活的民兵可以立即参与尸潮围城结算，但只有到自己的下一个回合，才能移动或驱逐尸潮。</p>
           </article>
 
           <article id="rules-fog" className="start-rules-section">
             <div className="start-rules-section-title">
-              <span className="start-rules-kicker">06 / 未知区域</span>
+              <span className="start-rules-kicker">07 / 未知区域</span>
               <h3>探索与迷雾</h3>
               <p>迷雾模式下，地图不会一开始完全公开。装甲车队是打开未知区域的关键。</p>
             </div>
@@ -761,9 +794,9 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
                 <CloudFog size={30} />
                 <strong>探索风险</strong>
                 <ul>
-                  <li>翻出感染区时，尸潮进度 +1。</li>
+                  <li>翻出感染区时，尸潮围城进度 +1。</li>
                   <li>探索者随机弃掉 1 张资源。</li>
-                  <li>如果进度因此到达 6，立刻结算尸潮围城。</li>
+                  <li>如果尸潮围城进度因此到达 6，立刻结算尸潮围城。</li>
                 </ul>
               </div>
             </div>
@@ -771,7 +804,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
 
           <article id="rules-cards" className="start-rules-section">
             <div className="start-rules-section-title">
-              <span className="start-rules-kicker">07 / 战术</span>
+              <span className="start-rules-kicker">08 / 战术</span>
               <h3>交易与发展卡</h3>
               <p>资源管理决定扩张速度。不要只盯着自己产什么，黑市、商人和发展卡都能改变资源结构。</p>
             </div>
@@ -796,7 +829,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
 
           <article id="rules-victory" className="start-rules-section">
             <div className="start-rules-section-title">
-              <span className="start-rules-kicker">08 / 结局</span>
+              <span className="start-rules-kicker">09 / 结局</span>
               <h3>胜利与失败</h3>
               <p>胜利点达标只是表面目标，真正的考验是：你能不能在尸潮来临时守住已经建好的优势。</p>
             </div>
@@ -814,7 +847,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
 
           <article id="rules-faq" className="start-rules-section">
             <div className="start-rules-section-title">
-              <span className="start-rules-kicker">09 / 提醒</span>
+              <span className="start-rules-kicker">10 / 提醒</span>
               <h3>常见问题</h3>
             </div>
             <div className="start-rules-faq">

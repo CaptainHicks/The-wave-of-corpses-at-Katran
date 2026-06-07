@@ -232,10 +232,15 @@ describe("RightOperationDock", () => {
 
     expect(screen.getByRole("dialog", { name: "规则说明" })).toBeInTheDocument();
     expect(screen.getByText("率先在自己的回合达到 12 点胜利点即可获胜。")).toBeInTheDocument();
-    expect(screen.getByText("掷骰产资源 → 处理尸潮 → 交易 → 建造 → 民兵 / 发展卡 → 检查胜利。")).toBeInTheDocument();
+    expect(screen.getByText("尸潮来袭")).toBeInTheDocument();
+    expect(screen.getByText("尸潮围城")).toBeInTheDocument();
+    expect(screen.getByText(/尸潮标志移动到任意已翻开的地块/)).toBeInTheDocument();
+    expect(screen.getByText(/围城强度等于全场堡垒总数/)).toBeInTheDocument();
     expect(screen.getByText("骰子点数等于地块数字时，相邻建筑获得资源。营地获得 1 张，堡垒获得 2 张。尸潮所在地块不产资源。")).toBeInTheDocument();
     expect(screen.getByText("每名玩家首次在非起始的新资源区建立营地时，额外获得 1 点胜利点；同一玩家在每个新资源区最多获得一次该奖励。")).toBeInTheDocument();
-    expect(screen.getByText("民兵需要先征召，再支付食物激活。只有已激活民兵可以防御、驱逐尸潮或移动。")).toBeInTheDocument();
+    expect(screen.getByText(/本回合刚激活的民兵会立即计入尸潮围城防御值/)).toBeInTheDocument();
+    expect(screen.getByText(/必须等到自己的下一个回合，才能执行主动行动/)).toBeInTheDocument();
+    expect(screen.getByText(/移动或驱逐完成后，该民兵会重新变为未激活状态/)).toBeInTheDocument();
     expect(screen.getByText("每回合最多使用 1 张发展卡，本回合购买的发展卡不能立刻使用。秘密据点在达到胜利条件时公开计分。")).toBeInTheDocument();
   });
 

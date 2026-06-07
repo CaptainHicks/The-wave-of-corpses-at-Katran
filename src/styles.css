@@ -5990,7 +5990,8 @@ textarea {
   backface-visibility: hidden;
   transform: scale(0.7);
   transform-origin: center;
-  transition: transform 160ms ease;
+  /* Pan lives on the parent, so scale must update in the same frame to keep the viewport center anchored. */
+  transition: none;
   will-change: transform;
 }
 
@@ -6014,19 +6015,6 @@ textarea {
   background:
     repeating-linear-gradient(0deg, rgba(244, 223, 168, 0.028), rgba(244, 223, 168, 0.028) 1px, transparent 1px, transparent 5px),
     radial-gradient(circle at 50% 48%, transparent 0 42%, rgba(0, 0, 0, 0.32) 76%, rgba(0, 0, 0, 0.64));
-  pointer-events: none;
-}
-
-.map-center-zone {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 60%;
-  height: 50%;
-  border: 1px solid rgba(244, 231, 199, 0.08);
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  background: radial-gradient(ellipse at center, rgba(246, 232, 202, 0.08), transparent 68%);
   pointer-events: none;
 }
 
@@ -7876,6 +7864,21 @@ textarea {
   font-size: 14px;
   font-weight: 760;
   line-height: 1.65;
+}
+
+.system-rules-dialog-body ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 18px;
+  color: rgba(234, 223, 196, 0.72);
+  font-size: 14px;
+  font-weight: 760;
+  line-height: 1.55;
+}
+
+.system-rules-dialog-body li::marker {
+  color: #d49a55;
 }
 
 .audio-settings-panel {

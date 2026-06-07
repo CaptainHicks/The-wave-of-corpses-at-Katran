@@ -155,7 +155,15 @@ describe("StartScreen", () => {
     expect(screen.getByRole("region", { name: "规则说明正文" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "游戏概述" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "回合流程" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "尸潮与民兵" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "尸潮来袭与尸潮围城" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "民兵规则" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "民兵规则" })).toBeInTheDocument();
+    expect(screen.getByText("尸潮来袭：掷出 7")).toBeInTheDocument();
+    expect(screen.getByText("尸潮围城：进度达到 6")).toBeInTheDocument();
+    expect(screen.getByText("民兵：征召与驻守")).toBeInTheDocument();
+    expect(screen.getByText("民兵：激活与主动行动")).toBeInTheDocument();
+    expect(screen.getByText(/本回合刚激活的民兵可以立即参与尸潮围城结算/)).toBeInTheDocument();
+    expect(screen.getByText(/只有到自己的下一个回合，才能移动或驱逐尸潮/)).toBeInTheDocument();
     expect(screen.getByText("率先达到 12 点")).toBeInTheDocument();
     expect(screen.getByLabelText("每名玩家棋子上限")).toBeInTheDocument();
     expect(screen.getByText("营地：5 个")).toBeInTheDocument();
@@ -182,7 +190,7 @@ describe("StartScreen", () => {
 
     fireEvent.scroll(scrollRegion, { target: { scrollTop: 900 } });
 
-    expect(screen.getByRole("link", { name: "尸潮与民兵" })).toHaveAttribute("aria-current", "true");
+    expect(screen.getByRole("link", { name: "尸潮来袭与围城" })).toHaveAttribute("aria-current", "true");
     expect(screen.getByRole("link", { name: "游戏概述" })).not.toHaveAttribute("aria-current");
   });
 
@@ -204,6 +212,24 @@ describe("StartScreen", () => {
     expect(scrollTo).toHaveBeenCalledWith({ top: 420, behavior: "auto" });
     expect(window.location.hash).toBe("");
     expect(screen.getByRole("link", { name: "回合流程" })).toHaveAttribute("aria-current", "true");
+  });
+
+  it("opens militia rules from its dedicated handbook sidebar entry", () => {
+    const { container } = renderStartScreen();
+
+    fireEvent.click(screen.getByRole("button", { name: "规则说明" }));
+
+    const scrollRegion = screen.getByRole("region", { name: "规则说明正文" });
+    const militiaSection = container.querySelector<HTMLElement>("#rules-militia");
+    const scrollTo = vi.fn();
+    expect(militiaSection).not.toBeNull();
+    Object.defineProperty(militiaSection, "offsetTop", { value: 1180, configurable: true });
+    Object.defineProperty(scrollRegion, "scrollTo", { value: scrollTo, configurable: true });
+
+    fireEvent.click(screen.getByRole("link", { name: "民兵规则" }));
+
+    expect(scrollTo).toHaveBeenCalledWith({ top: 1180, behavior: "auto" });
+    expect(screen.getByRole("link", { name: "民兵规则" })).toHaveAttribute("aria-current", "true");
   });
 
   it("uses volume controls in settings instead of visual effect toggles", () => {

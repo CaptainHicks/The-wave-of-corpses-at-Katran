@@ -1,6 +1,6 @@
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { applyCommand } from "../../domain/rules";
+import { applyCommand, legalInitialCampVertices } from "../../domain/rules";
 import type { GameState } from "../../domain/types";
 import { GameShell } from "../../ui/GameShell";
 
@@ -137,5 +137,121 @@ describe("GameShell online turn reminder", () => {
 
     expect(screen.getByText("轮到你了")).toBeInTheDocument();
     expect(screen.getByText("蓝钢哨站，开始你的行动。")).toBeInTheDocument();
+  });
+
+  it("does not remind the same online viewer again for the setup route after placing a camp", () => {
+    const state = createState();
+    const { rerender } = renderGameShell({ state, viewerPlayerId: "p1", interactionMode: "online" });
+
+    act(() => {
+      vi.advanceTimersByTime(2600);
+    });
+    expect(screen.queryByText("轮到你了")).not.toBeInTheDocument();
+
+    const nextState = applyCommand(state, { type: "placeInitialCamp", vertexId: legalInitialCampVertices(state)[0] });
+    rerender(
+      <GameShell
+        state={nextState}
+        privacy={false}
+        seatPlayerName="赤锈营地"
+        viewerPlayerId="p1"
+        interactionMode="online"
+        tool="none"
+        animationEvents={[]}
+        animationBusy={false}
+        onClosePrivacy={vi.fn()}
+        onDismissError={vi.fn()}
+        onClear={vi.fn()}
+        submit={vi.fn()}
+        setTool={vi.fn()}
+        setSelection={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText("轮到你了")).not.toBeInTheDocument();
+  });
+
+  it("does not remind the same online viewer again when rolling seven creates zombie movement", () => {
+    const state = { ...createState(), phase: "prepare" as const, turn: 2 };
+    const { rerender } = renderGameShell({ state, viewerPlayerId: "p1", interactionMode: "online" });
+
+    act(() => {
+      vi.advanceTimersByTime(2600);
+    });
+    expect(screen.queryByText("轮到你了")).not.toBeInTheDocument();
+
+    const nextState = applyCommand(state, { type: "rollDice", forced: [3, 4] });
+    expect(nextState.pending?.kind).toBe("moveZombie");
+    rerender(
+      <GameShell
+        state={nextState}
+        privacy={false}
+        seatPlayerName="赤锈营地"
+        viewerPlayerId="p1"
+        interactionMode="online"
+        tool="none"
+        animationEvents={[]}
+        animationBusy={false}
+        onClosePrivacy={vi.fn()}
+        onDismissError={vi.fn()}
+        onClear={vi.fn()}
+        submit={vi.fn()}
+        setTool={vi.fn()}
+        setSelection={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText("轮到你了")).not.toBeInTheDocument();
+  });
+
+  it("does not remind the same online viewer again after another player briefly becomes active in the same turn", () => {
+    const state = { ...createState(), phase: "zombie" as const, turn: 2 };
+    const { rerender } = renderGameShell({ state, viewerPlayerId: "p1", interactionMode: "online" });
+
+    act(() => {
+      vi.advanceTimersByTime(2600);
+    });
+    expect(screen.queryByText("轮到你了")).not.toBeInTheDocument();
+
+    rerender(
+      <GameShell
+        state={{ ...state, pending: { kind: "discard", playerId: "p2", amount: 1 } }}
+        privacy={false}
+        seatPlayerName="赤锈营地"
+        viewerPlayerId="p1"
+        interactionMode="online"
+        tool="none"
+        animationEvents={[]}
+        animationBusy={false}
+        onClosePrivacy={vi.fn()}
+        onDismissError={vi.fn()}
+        onClear={vi.fn()}
+        submit={vi.fn()}
+        setTool={vi.fn()}
+        setSelection={vi.fn()}
+      />
+    );
+    expect(screen.queryByText("轮到你了")).not.toBeInTheDocument();
+
+    rerender(
+      <GameShell
+        state={{ ...state, pending: { kind: "moveZombie", playerId: "p1", stealAfterMove: true } }}
+        privacy={false}
+        seatPlayerName="赤锈营地"
+        viewerPlayerId="p1"
+        interactionMode="online"
+        tool="none"
+        animationEvents={[]}
+        animationBusy={false}
+        onClosePrivacy={vi.fn()}
+        onDismissError={vi.fn()}
+        onClear={vi.fn()}
+        submit={vi.fn()}
+        setTool={vi.fn()}
+        setSelection={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText("轮到你了")).not.toBeInTheDocument();
   });
 });
