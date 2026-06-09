@@ -92,13 +92,17 @@ function getSelectionHint(selection: UiSelection) {
     return "请选择商人要移动到的已翻开资源地块。";
   }
   if (selection.kind === "devMilitia") {
-    return "请选择民兵动员要部署的己方营地或堡垒，最多 2 个。";
+    return selection.vertexIds.length > 0
+      ? "可继续选择第二个民兵部署位置，或在发展操作区使用已选位置。"
+      : "请选择民兵动员要部署的己方营地或堡垒，最多 2 个。";
   }
   if (selection.kind === "devRequisition") {
     return "请选择一种资源，征用所有其他玩家手中的该资源。";
   }
   if (selection.kind === "devRoadCrew") {
-    return selection.routes.length > 0 ? "可继续选择第二条路线，或使用已选路线。" : "选择开路队要免费建造的第一条路线。";
+    return selection.routes.length > 0
+      ? "可继续选择第二条路线，或在发展操作区使用已选路线。"
+      : "请在发展操作区选择路线类型，再选择开路队要免费建造的第一条路线。";
   }
 
   return undefined;

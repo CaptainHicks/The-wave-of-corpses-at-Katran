@@ -15,6 +15,8 @@ import {
   legalBuildVertices,
   legalConvoyMoveFromEdges,
   legalConvoyMoveToEdges,
+  legalDevelopmentRouteEdges,
+  legalExpelZombieTiles,
   legalInitialCampVertices,
   legalInitialRouteEdges,
   legalMerchantTiles,
@@ -238,6 +240,9 @@ describe("BoardView interaction targets", () => {
     expect(legalBuildVertices(state).length).toBeGreaterThan(0);
     const preview = container.querySelector(".building-piece-preview");
 
+    expect(preview).toHaveAttribute("filter", "url(#selection-white-preview)");
+    expect(container.querySelector("#selection-white-outline")).toBeInTheDocument();
+    expect(container.querySelector("#selection-white-preview")).toBeInTheDocument();
     expect(preview).toHaveAttribute(
       "href",
       getBuildingPieceAsset({
@@ -384,6 +389,47 @@ describe("BoardView interaction targets", () => {
     expect(tileArt).not.toHaveClass("legal-tile-art-target");
   });
 
+  it("keeps expel zombie targets clickable without drawing selectable tile highlights", () => {
+    const state = setupActionState("expel-zombie-without-tile-highlights");
+    const player = state.players.find((item) => item.id === state.currentPlayerId)!;
+    const militiaVertex = Object.values(state.board.vertices).find(
+      (vertex) => vertex.building?.ownerId === player.id && vertex.tileIds.some((tileId) => state.board.tiles[tileId]?.revealed)
+    );
+    expect(militiaVertex).toBeTruthy();
+
+    const zombieTileId = militiaVertex!.tileIds.find((tileId) => state.board.tiles[tileId]?.revealed);
+    expect(zombieTileId).toBeTruthy();
+    state.zombieTileId = zombieTileId!;
+    player.militia.push({
+      id: "expel-highlight-test-militia",
+      ownerId: player.id,
+      vertexId: militiaVertex!.id,
+      status: "active",
+      activatedTurn: state.turn - 1
+    });
+
+    const targetTileId = legalExpelZombieTiles(state, "expel-highlight-test-militia")[0];
+    expect(targetTileId).toBeTruthy();
+    const submit = vi.fn();
+    const { container } = renderBoard(
+      state,
+      "none",
+      submit,
+      { kind: "expelZombie", militiaId: "expel-highlight-test-militia" }
+    );
+
+    expect(container.querySelector(".tile-selection-outline-layer")).toBeNull();
+    expect(container.querySelector(`[data-tile-id="${targetTileId}"] .tile-outline`)).not.toHaveClass("legal");
+
+    fireEvent.click(container.querySelector(`[data-tile-id="${targetTileId}"]`)!);
+
+    expect(submit).toHaveBeenCalledWith({
+      type: "expelZombie",
+      militiaId: "expel-highlight-test-militia",
+      toTileId: targetTileId
+    });
+  });
+
   it("queues two militia mobilization placements before playing the card", () => {
     const state = setupActionState("dev-militia-two-placements");
     const vertexId = legalRecruitVertices(state)[0];
@@ -413,6 +459,44 @@ describe("BoardView interaction targets", () => {
       type: "playDevelopmentCard",
       cardId: "militia-card",
       payload: { vertexIds: [vertexId, vertexId] }
+    });
+  });
+
+  it("allows road crew to queue a second route connected only to its first route", () => {
+    const state = setupActionState("road-crew-connected-routes");
+    const originalLegalEdges = new Set(legalDevelopmentRouteEdges(state));
+    const firstEdgeId = [...originalLegalEdges].find((edgeId) =>
+      legalDevelopmentRouteEdges(state, "transport", [{ edgeId, routeType: "transport" }]).some(
+        (candidateId) => !originalLegalEdges.has(candidateId)
+      )
+    );
+    expect(firstEdgeId).toBeTruthy();
+    const secondEdgeId = legalDevelopmentRouteEdges(state, "transport", [
+      { edgeId: firstEdgeId!, routeType: "transport" }
+    ]).find((edgeId) => !originalLegalEdges.has(edgeId));
+    expect(secondEdgeId).toBeTruthy();
+
+    const selection: UiSelection = {
+      kind: "devRoadCrew",
+      cardId: "road-crew-card",
+      routeType: "transport",
+      routes: [{ edgeId: firstEdgeId!, routeType: "transport" }]
+    };
+    const submit = vi.fn();
+    const { container } = renderBoard(state, "transport", submit, selection);
+
+    expect(container.querySelector(`[data-edge-id="${secondEdgeId}"] .route-piece-preview`)).toBeInTheDocument();
+    fireEvent.click(container.querySelector(`[data-edge-id="${secondEdgeId}"]`)!);
+
+    expect(submit).toHaveBeenCalledWith({
+      type: "playDevelopmentCard",
+      cardId: "road-crew-card",
+      payload: {
+        routes: [
+          { edgeId: firstEdgeId, routeType: "transport" },
+          { edgeId: secondEdgeId, routeType: "transport" }
+        ]
+      }
     });
   });
 

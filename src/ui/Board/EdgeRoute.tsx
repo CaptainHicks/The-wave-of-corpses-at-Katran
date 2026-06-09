@@ -1,6 +1,7 @@
 import type { CSSProperties, MouseEvent } from "react";
 import type { EdgeState, PlayerState, RouteType, VertexState } from "../../domain/types";
 import { getRoutePieceAsset } from "../art/assetManifest";
+import { routePieceColorStyle } from "./pieceColorStyles";
 
 export function EdgeRoute({
   edge,
@@ -28,7 +29,7 @@ export function EdgeRoute({
   onClick: () => void;
 }) {
   const routeStyle = edge.route
-    ? ({ stroke: owner?.color, "--route-color": owner?.color ?? "#f2c14e" } as CSSProperties)
+    ? routePieceColorStyle(owner?.color, { stroke: owner?.color } as CSSProperties)
     : undefined;
   const routeAsset =
     edge.route && owner
@@ -55,7 +56,7 @@ export function EdgeRoute({
       : undefined;
   const previewStyle =
     previewRouteType && previewOwner
-      ? ({ "--route-color": previewOwner.color } as CSSProperties)
+      ? routePieceColorStyle(previewOwner.color)
       : undefined;
   const hasRouteSelectionOutline = Boolean(edge.route && routeAsset && (legal || selected || queued));
 
@@ -82,6 +83,7 @@ export function EdgeRoute({
             preserveAspectRatio="xMidYMid meet"
             transform={`rotate(${routeAngle} ${midX} ${midY})`}
             className={`route-piece-legal-outline ${selected || queued ? "is-selected" : ""}`}
+            filter={selected || queued ? "url(#selection-gold-outline)" : "url(#selection-white-outline)"}
             aria-hidden="true"
           />
         )}
@@ -125,6 +127,7 @@ export function EdgeRoute({
           className={`route-piece route-piece-${previewRouteType} route-piece-preview ${
             selected || queued ? "is-selected" : ""
           }`}
+          filter={selected || queued ? "url(#selection-gold-preview)" : "url(#selection-white-preview)"}
           aria-hidden="true"
         />
         <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={`edge edge-hitbox ${coarsePointer ? "coarse-hitbox" : ""}`} />
@@ -133,20 +136,25 @@ export function EdgeRoute({
   }
 
   return (
-    <line
-      x1={a.x}
-      y1={a.y}
-      x2={b.x}
-      y2={b.y}
-      className={`edge ${edge.route ? `route-${edge.route.type}` : ""} ${legal ? "legal" : ""} ${
-        selected || queued ? "selected-edge" : ""
-      } ${coarsePointer ? "coarse-hitbox" : ""}`}
+    <g
+      className="edge-route-group"
       style={routeStyle}
       data-edge-id={edge.id}
-      onClick={(event: MouseEvent<SVGLineElement>) => {
+      onClick={(event: MouseEvent<SVGGElement>) => {
         event.stopPropagation();
         onClick();
       }}
-    />
+    >
+      <line
+        x1={a.x}
+        y1={a.y}
+        x2={b.x}
+        y2={b.y}
+        className={`edge ${edge.route ? `route-${edge.route.type}` : ""} ${legal ? "legal" : ""} ${
+          selected || queued ? "selected-edge" : ""
+        }`}
+      />
+      <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={`edge edge-hitbox ${coarsePointer ? "coarse-hitbox" : ""}`} />
+    </g>
   );
 }

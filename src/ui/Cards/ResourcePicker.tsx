@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { RESOURCE_LABELS, RESOURCES, createResources } from "../../domain/constants";
 import { resourceTotal } from "../../domain/rules";
 import type { Resources } from "../../domain/types";
+import { resourceIconAssets } from "../art/assetManifest";
+import { AssetIcon } from "../Actions/AssetIcon";
 
 export function ResourcePicker({
   amount,
@@ -41,6 +43,12 @@ export function ResourcePicker({
             }}
           >
             <Plus size={14} />
+            {resourceIconAssets[resource].imageUrl && (
+              <AssetIcon
+                src={resourceIconAssets[resource].imageUrl}
+                className={`resource-choice-asset-icon resource-choice-asset-icon-${resource}`}
+              />
+            )}
             {RESOURCE_LABELS[resource]} {resources[resource]}
             {available ? ` / ${available[resource]}` : ""}
           </button>

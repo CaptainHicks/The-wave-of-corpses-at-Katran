@@ -26,6 +26,7 @@ const TOUCH_PULL_INTENT_RATIO = 0.55;
 const TOUCH_PULL_RETAIN_PX = 20;
 const TOUCH_PULL_PLAY_PX = 88;
 const TOUCH_PULL_MAX_PX = 110;
+const TOUCH_POINTER_ID_OFFSET = 100_000;
 
 interface HoverAnchor {
   cardId: string;
@@ -43,6 +44,7 @@ interface TouchExploreState {
   mode: "explore" | "pull";
   startX: number;
   startY: number;
+  stageScale: number;
 }
 
 interface TouchDragVisual {
@@ -148,17 +150,16 @@ export function DevCardHand({
   }, [isCoarsePointer]);
 
   useEffect(() => {
-    const handlePointerMove = (event: PointerEvent) => {
+    const updateTouchSession = (clientX: number, clientY: number) => {
       const activeTouch = activeTouchRef.current;
-      if (!activeTouch || event.pointerId !== activeTouch.pointerId) return;
-      event.preventDefault();
-      lastPointerRef.current = { x: event.clientX, y: event.clientY };
+      if (!activeTouch) return;
+      lastPointerRef.current = { x: clientX, y: clientY };
 
-      const targetCardId = getTouchCardIdAtPoint(event.clientX, event.clientY);
+      const targetCardId = getTouchCardIdAtPoint(clientX, clientY);
       if (activeTouch.mode === "pull") {
-        const pullDistance = activeTouch.cardId ? Math.max(0, activeTouch.startY - event.clientY) : 0;
+        const pullDistance = activeTouch.cardId ? getTouchPullDistance(activeTouch, clientY) : 0;
         if (targetCardId && pullDistance < TOUCH_PULL_RETAIN_PX) {
-          activateTouchCard(activeTouch, targetCardId, event.clientX, event.clientY);
+          activateTouchCard(activeTouch, targetCardId, clientX, clientY);
           clearTouchDrag();
           return;
         }
@@ -167,19 +168,19 @@ export function DevCardHand({
       }
 
       if (targetCardId) {
-        activateTouchCard(activeTouch, targetCardId, event.clientX, event.clientY);
-        if (shouldStartTouchPull(activeTouch, event.clientX, event.clientY)) {
+        activateTouchCard(activeTouch, targetCardId, clientX, clientY);
+        if (shouldStartTouchPull(activeTouch, clientX, clientY)) {
           activeTouch.mode = "pull";
-          setTouchPull(targetCardId, Math.max(0, activeTouch.startY - event.clientY));
+          setTouchPull(targetCardId, getTouchPullDistance(activeTouch, clientY));
           return;
         }
         clearTouchDrag();
         return;
       }
 
-      if (activeTouch.cardId && shouldStartTouchPull(activeTouch, event.clientX, event.clientY)) {
+      if (activeTouch.cardId && shouldStartTouchPull(activeTouch, clientX, clientY)) {
         activeTouch.mode = "pull";
-        setTouchPull(activeTouch.cardId, Math.max(0, activeTouch.startY - event.clientY));
+        setTouchPull(activeTouch.cardId, getTouchPullDistance(activeTouch, clientY));
         return;
       }
 
@@ -188,13 +189,12 @@ export function DevCardHand({
       retractNow();
     };
 
-    const handlePointerUp = (event: PointerEvent) => {
+    const finishTouchSession = (clientX: number, clientY: number) => {
       const activeTouch = activeTouchRef.current;
-      if (!activeTouch || event.pointerId !== activeTouch.pointerId) return;
-      event.preventDefault();
-      lastPointerRef.current = { x: event.clientX, y: event.clientY };
+      if (!activeTouch) return;
+      lastPointerRef.current = { x: clientX, y: clientY };
       const cardId = activeTouch.cardId;
-      const pullDistance = cardId && activeTouch.mode === "pull" ? Math.max(0, activeTouch.startY - event.clientY) : 0;
+      const pullDistance = cardId && activeTouch.mode === "pull" ? getTouchPullDistance(activeTouch, clientY) : 0;
 
       clearTouchSession();
 
@@ -206,6 +206,20 @@ export function DevCardHand({
       retractNow();
     };
 
+    const handlePointerMove = (event: PointerEvent) => {
+      const activeTouch = activeTouchRef.current;
+      if (!activeTouch || event.pointerId !== activeTouch.pointerId) return;
+      event.preventDefault();
+      updateTouchSession(event.clientX, event.clientY);
+    };
+
+    const handlePointerUp = (event: PointerEvent) => {
+      const activeTouch = activeTouchRef.current;
+      if (!activeTouch || event.pointerId !== activeTouch.pointerId) return;
+      event.preventDefault();
+      finishTouchSession(event.clientX, event.clientY);
+    };
+
     const handlePointerCancel = (event: PointerEvent) => {
       const activeTouch = activeTouchRef.current;
       if (!activeTouch || event.pointerId !== activeTouch.pointerId) return;
@@ -213,13 +227,44 @@ export function DevCardHand({
       retractNow();
     };
 
+    const handleTouchMove = (event: TouchEvent) => {
+      const activeTouch = activeTouchRef.current;
+      if (!activeTouch || activeTouch.pointerId < TOUCH_POINTER_ID_OFFSET) return;
+      const touch = findChangedTouch(event.touches, activeTouch.pointerId - TOUCH_POINTER_ID_OFFSET);
+      if (!touch) return;
+      event.preventDefault();
+      updateTouchSession(touch.clientX, touch.clientY);
+    };
+
+    const handleTouchEnd = (event: TouchEvent) => {
+      const activeTouch = activeTouchRef.current;
+      if (!activeTouch || activeTouch.pointerId < TOUCH_POINTER_ID_OFFSET) return;
+      const touch = findChangedTouch(event.changedTouches, activeTouch.pointerId - TOUCH_POINTER_ID_OFFSET);
+      if (!touch) return;
+      event.preventDefault();
+      finishTouchSession(touch.clientX, touch.clientY);
+    };
+
+    const handleTouchCancel = () => {
+      const activeTouch = activeTouchRef.current;
+      if (!activeTouch || activeTouch.pointerId < TOUCH_POINTER_ID_OFFSET) return;
+      clearTouchSession();
+      retractNow();
+    };
+
     window.addEventListener("pointermove", handlePointerMove, { passive: false });
     window.addEventListener("pointerup", handlePointerUp, { passive: false });
     window.addEventListener("pointercancel", handlePointerCancel, { passive: true });
+    window.addEventListener("touchmove", handleTouchMove, { passive: false });
+    window.addEventListener("touchend", handleTouchEnd, { passive: false });
+    window.addEventListener("touchcancel", handleTouchCancel, { passive: true });
     return () => {
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerCancel);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleTouchEnd);
+      window.removeEventListener("touchcancel", handleTouchCancel);
     };
   }, [renderedCardsById]);
 
@@ -475,7 +520,14 @@ export function DevCardHand({
   const beginTouchExplore = (cardId: string, pointerId: number, clientX: number, clientY: number) => {
     captureTouchCardZones();
     lastPointerRef.current = { x: clientX, y: clientY };
-    activeTouchRef.current = { pointerId, cardId, mode: "explore", startX: clientX, startY: clientY };
+    activeTouchRef.current = {
+      pointerId,
+      cardId,
+      mode: "explore",
+      startX: clientX,
+      startY: clientY,
+      stageScale: getElementStageScale(handRef.current)
+    };
     setTouchExploring(true);
     clearTouchDrag();
     selectCard(cardId);
@@ -542,9 +594,32 @@ function isInsideHoverAnchor(anchor: HoverAnchor, x: number, y: number) {
 
 function shouldStartTouchPull(activeTouch: TouchExploreState, x: number, y: number) {
   if (!activeTouch.cardId) return false;
-  const pullDistance = Math.max(0, activeTouch.startY - y);
-  const horizontalDistance = Math.abs(x - activeTouch.startX);
+  const pullDistance = getTouchPullDistance(activeTouch, y);
+  const horizontalDistance = Math.abs(x - activeTouch.startX) / activeTouch.stageScale;
   return pullDistance >= TOUCH_PULL_START_PX && pullDistance >= horizontalDistance * TOUCH_PULL_INTENT_RATIO;
+}
+
+function getTouchPullDistance(activeTouch: TouchExploreState, y: number) {
+  return Math.max(0, activeTouch.startY - y) / activeTouch.stageScale;
+}
+
+function findChangedTouch(touches: TouchList, identifier: number) {
+  for (let index = 0; index < touches.length; index += 1) {
+    const touch = touches.item(index);
+    if (touch?.identifier === identifier) return touch;
+  }
+  return undefined;
+}
+
+function getElementStageScale(element: HTMLElement | null) {
+  if (!element) return 1;
+  const rect = element.getBoundingClientRect();
+  if (element.offsetWidth > 0 && rect.width > 0) {
+    return Math.max(0.01, Math.min(1, rect.width / element.offsetWidth));
+  }
+  const shell = element.closest<HTMLElement>(".game-shell");
+  const cssScale = shell ? Number.parseFloat(getComputedStyle(shell).getPropertyValue("--game-stage-scale")) : Number.NaN;
+  return Number.isFinite(cssScale) && cssScale > 0 ? cssScale : 1;
 }
 
 function getDevCardPlayability(

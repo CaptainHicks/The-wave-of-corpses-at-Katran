@@ -1390,21 +1390,46 @@ export function legalInitialRouteEdges(state: GameState): string[] {
 export function legalBuildEdges(state: GameState, routeType: RouteType = "transport"): string[] {
   if (state.phase !== "action") return [];
   const player = currentPlayer(state);
-  return legalRouteEdgesForPlayer(state, player.id, routeType);
+  return legalRouteEdgesForPlayer(state.board, player.id, routeType);
 }
 
-function legalRouteEdgesForPlayer(state: GameState, playerId: string, routeType: RouteType): string[] {
-  return Object.values(state.board.edges)
+function legalRouteEdgesForPlayer(board: BoardState, playerId: string, routeType: RouteType): string[] {
+  return Object.values(board.edges)
     .filter((edge) => !edge.route)
-    .filter((edge) => edgeConnectedToPlayerNetwork(state.board, edge.id, playerId))
-    .filter((edge) => routeTypeAllowedOnEdge(state.board, edge.id, routeType))
+    .filter((edge) => edgeConnectedToPlayerNetwork(board, edge.id, playerId))
+    .filter((edge) => routeTypeAllowedOnEdge(board, edge.id, routeType))
     .map((edge) => edge.id);
 }
 
-export function legalDevelopmentRouteEdges(state: GameState, routeType: RouteType = "transport"): string[] {
+export function legalDevelopmentRouteEdges(
+  state: GameState,
+  routeType: RouteType = "transport",
+  queuedRoutes: Array<{ edgeId: string; routeType: RouteType }> = []
+): string[] {
   if (state.phase !== "action") return [];
   const player = currentPlayer(state);
-  return legalRouteEdgesForPlayer(state, player.id, routeType);
+  const board =
+    queuedRoutes.length > 0
+      ? {
+          ...state.board,
+          edges: { ...state.board.edges }
+        }
+      : state.board;
+
+  queuedRoutes.forEach((route) => {
+    const edge = board.edges[route.edgeId];
+    if (
+      !edge ||
+      edge.route ||
+      !edgeConnectedToPlayerNetwork(board, edge.id, player.id) ||
+      !routeTypeAllowedOnEdge(board, edge.id, route.routeType)
+    ) {
+      return;
+    }
+    board.edges[edge.id] = { ...edge, route: { ownerId: player.id, type: route.routeType } };
+  });
+
+  return legalRouteEdgesForPlayer(board, player.id, routeType);
 }
 
 export function legalBuildVertices(state: GameState): string[] {

@@ -16,10 +16,6 @@ function buildReelValues(cycle: readonly number[]): number[] {
   return Array.from({ length: REEL_SPIN_STEPS }, (_, index) => cycle[index % cycle.length]);
 }
 
-function prefersReducedMotion(): boolean {
-  return Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
-}
-
 export function DiceResultPanel({ state }: { state: GameState; mode: TurnUiMode }) {
   const diceA = state.dice?.[0];
   const diceB = state.dice?.[1];
@@ -33,10 +29,6 @@ export function DiceResultPanel({ state }: { state: GameState; mode: TurnUiMode 
       return undefined;
     }
     setSpinKey((key) => key + 1);
-    if (prefersReducedMotion()) {
-      setIsSpinning(false);
-      return undefined;
-    }
     setIsSpinning(true);
 
     const startedAt = performance.now();

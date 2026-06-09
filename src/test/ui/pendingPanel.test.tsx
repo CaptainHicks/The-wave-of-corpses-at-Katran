@@ -29,6 +29,26 @@ function setupGame(): GameState {
 }
 
 describe("PendingPanel", () => {
+  it("shows centered resource choice buttons with resource icons", () => {
+    const state = setupGame();
+    state.pending = {
+      kind: "chooseResource",
+      playerId: "p1",
+      amount: 2,
+      reason: "airdrop"
+    };
+
+    const { container } = render(
+      <PendingPanel state={state} submit={vi.fn()} setTool={vi.fn()} />
+    );
+
+    const resourceButtons = [...container.querySelectorAll(".resource-picker .resource-buttons > button")];
+    expect(resourceButtons).toHaveLength(5);
+    resourceButtons.forEach((button) => {
+      expect(button.querySelector(".resource-choice-asset-icon img")).toBeInTheDocument();
+    });
+  });
+
   it("does not render raw vertex id buttons for fortress downgrades", () => {
     const state = setupGame();
     const fortress = Object.values(state.board.vertices).find((vertex) => vertex.building?.ownerId === "p1")!;

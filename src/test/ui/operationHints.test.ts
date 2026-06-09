@@ -110,4 +110,37 @@ describe("getOperationHint", () => {
       })
     ).toBe("征用物资可打出。下一步选择一种要征用的资源");
   });
+
+  it("uses top hints for every development card selection step", () => {
+    const state = applyCommand(setupGame(), { type: "rollDice", forced: [1, 1] });
+
+    expect(getOperationHint(state, "none", { kind: "devMerchant", cardId: "merchant" })).toBe(
+      "请选择商人要移动到的已翻开资源地块"
+    );
+    expect(getOperationHint(state, "none", { kind: "devMilitia", cardId: "militia", vertexIds: [] })).toBe(
+      "请选择民兵动员要部署的己方营地或堡垒，最多 2 个"
+    );
+    expect(getOperationHint(state, "none", { kind: "devMilitia", cardId: "militia", vertexIds: ["v1"] })).toBe(
+      "可继续选择第二个民兵部署位置，或在发展操作区使用已选位置"
+    );
+    expect(getOperationHint(state, "none", { kind: "devRequisition", cardId: "requisition" })).toBe(
+      "请选择一种资源，征用所有其他玩家手中的该资源"
+    );
+    expect(
+      getOperationHint(state, "transport", {
+        kind: "devRoadCrew",
+        cardId: "road-crew",
+        routeType: "transport",
+        routes: []
+      })
+    ).toBe("请在发展操作区选择路线类型，再选择开路队要免费建造的第一条路线");
+    expect(
+      getOperationHint(state, "transport", {
+        kind: "devRoadCrew",
+        cardId: "road-crew",
+        routeType: "transport",
+        routes: [{ edgeId: "e1", routeType: "transport" }]
+      })
+    ).toBe("可继续选择第二条路线，或在发展操作区使用已选路线");
+  });
 });

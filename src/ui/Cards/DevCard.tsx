@@ -4,6 +4,7 @@ import type { DevCard as DevCardModel } from "../../domain/types";
 import { devCardAssets } from "../art/assetManifest";
 
 const SWIPE_THRESHOLD = 36;
+const TOUCH_POINTER_ID_OFFSET = 100_000;
 
 export function DevCard({
   card,
@@ -89,6 +90,12 @@ export function DevCard({
     if (!onPlay()) showDenied();
   };
 
+  const beginCoarseGesture = (pointerId: number, clientX: number, clientY: number) => {
+    swallowedClick.current = true;
+    pointerStartY.current = undefined;
+    onCoarsePointerDown(pointerId, clientX, clientY);
+  };
+
   const startGesture = (clientY: number, selectOnPress: boolean) => {
     pointerStartY.current = clientY;
     swallowedClick.current = false;
@@ -139,18 +146,24 @@ export function DevCard({
       }}
       onPointerDown={(event) => {
         if (event.pointerType !== "mouse") {
-          swallowedClick.current = true;
-          pointerStartY.current = undefined;
-          onCoarsePointerDown(event.pointerId, event.clientX, event.clientY);
-          event.currentTarget.setPointerCapture(event.pointerId);
+          beginCoarseGesture(event.pointerId, event.clientX, event.clientY);
+          if (typeof event.currentTarget.setPointerCapture === "function") {
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }
           event.preventDefault();
           return;
         }
         startGesture(event.clientY, event.pointerType === "mouse" || !coarsePointer);
-        event.currentTarget.setPointerCapture(event.pointerId);
+        if (typeof event.currentTarget.setPointerCapture === "function") {
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }
       }}
       onPointerUp={(event) => {
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        if (
+          typeof event.currentTarget.hasPointerCapture === "function" &&
+          typeof event.currentTarget.releasePointerCapture === "function" &&
+          event.currentTarget.hasPointerCapture(event.pointerId)
+        ) {
           event.currentTarget.releasePointerCapture(event.pointerId);
         }
         if (event.pointerType !== "mouse") {
@@ -172,6 +185,13 @@ export function DevCard({
       }}
       onPointerCancel={() => {
         pointerStartY.current = undefined;
+      }}
+      onTouchStart={(event) => {
+        if (event.touches.length !== 1) return;
+        const touch = event.touches[0];
+        beginCoarseGesture(TOUCH_POINTER_ID_OFFSET + touch.identifier, touch.clientX, touch.clientY);
+        event.preventDefault();
+        event.stopPropagation();
       }}
     >
       <span className="card-face-art" aria-hidden="true">

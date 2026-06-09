@@ -66,6 +66,7 @@ const GAME_STAGE_HEIGHT = 941;
 const TURN_TIME_LIMIT_SECONDS = 60;
 const OPERATION_HINT_VISIBLE_MS = 4200;
 const ONLINE_TURN_REMINDER_VISIBLE_MS = 2600;
+const BOARD_INTERACTION_SELECTOR = "[data-tile-id], [data-edge-id], [data-vertex-id]";
 
 interface MapViewState {
   scale: number;
@@ -133,6 +134,16 @@ function buildOnlineTurnReminderKey(state: GameState, playerId: string, onlineRo
       ? `setup:${state.setup.round}:${state.setup.placementIndex}`
       : `turn:${state.turn}`;
   return `${onlineRoomCode ?? "room"}:${scope}:${playerId}`;
+}
+
+function isBoardInteractionTarget(target: EventTarget | null) {
+  return target instanceof Element && Boolean(target.closest(BOARD_INTERACTION_SELECTOR));
+}
+
+function captureMapPointer(target: HTMLElement, pointerId: number) {
+  if (!target.hasPointerCapture(pointerId)) {
+    target.setPointerCapture(pointerId);
+  }
 }
 
 function buildMapTransform(view: MapViewState) {
@@ -381,14 +392,18 @@ export function GameShell({
   };
   const handleMapPointerDown = (event: PointerEvent<HTMLElement>) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
+    const startedOnBoardTarget = isBoardInteractionTarget(event.target);
     activePointersRef.current.set(event.pointerId, {
       clientX: event.clientX,
       clientY: event.clientY
     });
-    if (event.pointerType !== "mouse" && !event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.setPointerCapture(event.pointerId);
+    if (event.pointerType !== "mouse" && !startedOnBoardTarget) {
+      captureMapPointer(event.currentTarget, event.pointerId);
     }
     if (activePointersRef.current.size >= 2) {
+      if (event.pointerType !== "mouse") {
+        activePointersRef.current.forEach((_, pointerId) => captureMapPointer(event.currentTarget, pointerId));
+      }
       beginPinchGesture(getMapView());
       return;
     }
@@ -422,9 +437,7 @@ export function GameShell({
     const dy = rawDy / stageScale;
     if (!drag.moved && Math.hypot(rawDx, rawDy) <= MAP_DRAG_START_THRESHOLD_PX) return;
     if (!drag.moved) {
-      if (!drag.moved && !event.currentTarget.hasPointerCapture(event.pointerId)) {
-        event.currentTarget.setPointerCapture(event.pointerId);
-      }
+      captureMapPointer(event.currentTarget, event.pointerId);
       drag.moved = true;
       suppressBoardClickRef.current = true;
       setIsPanning(true);
@@ -516,9 +529,10 @@ export function GameShell({
       return;
     }
     setVisibleOperationHintText(operationHint);
+    if (selection?.kind.startsWith("dev")) return;
     const timerId = window.setTimeout(() => setVisibleOperationHintText(undefined), OPERATION_HINT_VISIBLE_MS);
     return () => window.clearTimeout(timerId);
-  }, [operationHint]);
+  }, [operationHint, selection?.kind]);
 
   useEffect(() => {
     const handleResize = () => {

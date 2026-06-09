@@ -100,6 +100,7 @@ describe("VertexToken militia count marker", () => {
 
     expect(container.querySelector(".building-piece")).toHaveClass("legal-building-target");
     expect(container.querySelector(".building-piece-legal-outline")).toBeInTheDocument();
+    expect(container.querySelector(".building-piece-legal-outline")).toHaveAttribute("filter", "url(#selection-white-outline)");
     expect(container.querySelector(".vertex-legal-target-ring")).not.toBeInTheDocument();
     expect(container.querySelector(".vertex-hit-area")).toHaveAttribute("r", "18");
   });
@@ -164,6 +165,9 @@ describe("VertexToken militia count marker", () => {
     expect(container.querySelector(".building-piece")).toHaveAttribute(
       "href",
       "/assets/board/buildings/purple/camp.v1.webp"
+    );
+    expect(container.querySelector(".building-piece")?.getAttribute("style")).toContain(
+      "--piece-glow: rgba(142, 91, 183, 0.44)"
     );
   });
 });

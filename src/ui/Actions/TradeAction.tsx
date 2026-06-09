@@ -1,4 +1,4 @@
-import { ArrowRight, Minus, Plus } from "lucide-react";
+import { Minus, Plus } from "lucide-react";
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { RESOURCE_LABELS, RESOURCES, createResources } from "../../domain/constants";
 import { isBlackMarketVisible, tileResource } from "../../domain/board";
@@ -9,6 +9,7 @@ import { PUBLIC_TRADE_TARGET, type UiOperationContext } from "../gameUiTypes";
 import { AssetIcon } from "./AssetIcon";
 
 type TradeHintSource = "bank" | "player";
+type TradeMode = "bank" | "player";
 
 export function TradeAction({
   state,
@@ -25,6 +26,7 @@ export function TradeAction({
   const [tradeTarget, setTradeTarget] = useState(PUBLIC_TRADE_TARGET);
   const [playerOffer, setPlayerOffer] = useState<Resources>(() => createResources());
   const [playerRequest, setPlayerRequest] = useState<Resources>(() => createResources());
+  const [tradeMode, setTradeMode] = useState<TradeMode>("bank");
   const [tradeHintSource, setTradeHintSource] = useState<TradeHintSource>();
   const bestRate = tradeGive ? bestTradeRate(state, tradeGive) : 4;
   const canBankTrade =
@@ -37,7 +39,15 @@ export function TradeAction({
   const requestTotal = resourceTotal(playerRequest);
   const hasBankTradeHint = tradeGive !== "" || tradeReceive !== "";
   const hasPlayerTradeHint = tradeTarget !== PUBLIC_TRADE_TARGET || offerTotal > 0 || requestTotal > 0;
-  const activeTradeHintSource = tradeHintSource ?? (hasPlayerTradeHint ? "player" : hasBankTradeHint ? "bank" : undefined);
+  const activeTradeHintSource =
+    tradeHintSource ??
+    (tradeMode === "player"
+      ? hasPlayerTradeHint
+        ? "player"
+        : undefined
+      : hasBankTradeHint
+        ? "bank"
+        : undefined);
 
   const showBankTradeContext = () => {
     setOperationContext?.({
@@ -76,141 +86,177 @@ export function TradeAction({
     requestTotal,
     setOperationContext,
     tradeGive,
+    tradeMode,
     tradeReceive,
     tradeTarget
   ]);
 
   return (
     <section className="action-pane">
-      <div className="trade-panel-box action-subsection">
-        <h3>银行 / 黑市</h3>
-        <div className="trade-row">
-          <select
-            aria-label="兑换支出资源"
-            value={tradeGive}
-            onChange={(event) => {
-              setTradeHintSource("bank");
-              setTradeGive(event.target.value as Resource | "");
-            }}
-            onFocus={() => {
-              setTradeHintSource("bank");
-              showBankTradeContext();
-            }}
-          >
-            <option value="">选择支出</option>
-            {RESOURCES.map((resource) => (
-              <option key={resource} value={resource}>
-                {RESOURCE_LABELS[resource]}
-              </option>
-            ))}
-          </select>
-          <ArrowRight size={16} />
-          <select
-            aria-label="兑换获得资源"
-            value={tradeReceive}
-            onChange={(event) => {
-              setTradeHintSource("bank");
-              setTradeReceive(event.target.value as Resource | "");
-            }}
-            onFocus={() => {
-              setTradeHintSource("bank");
-              showBankTradeContext();
-            }}
-          >
-            <option value="">选择获得</option>
-            {RESOURCES.map((resource) => (
-              <option key={resource} value={resource}>
-                {RESOURCE_LABELS[resource]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="inline-actions trade-panel-actions">
-          <button
-            disabled={!canBankTrade}
-            onClick={() => {
-              if (!tradeGive || !tradeReceive) return;
-              submit({ type: "bankTrade", give: tradeGive, receive: tradeReceive });
-            }}
-          >
-            {bestRate}:1 兑换
-          </button>
-        </div>
-      </div>
-
-      <div className="trade-panel-box player-trade-box">
-        <h3>玩家报价</h3>
-        <select
-          value={tradeTarget}
-          onFocus={() => {
-            setTradeHintSource("player");
-            showPlayerTradeContext();
-          }}
-          onChange={(event) => {
-            setTradeHintSource("player");
-            setTradeTarget(event.target.value);
+      <div className="segmented small trade-mode-selector" role="group" aria-label="交易方式">
+        <button
+          type="button"
+          className={tradeMode === "bank" ? "active" : ""}
+          aria-pressed={tradeMode === "bank"}
+          onClick={() => {
+            setTradeMode("bank");
+            setTradeHintSource(hasBankTradeHint ? "bank" : undefined);
           }}
         >
-          <option value={PUBLIC_TRADE_TARGET}>向所有玩家公开报价</option>
-          {state.players
-            .filter((item) => item.id !== state.currentPlayerId)
-            .map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-        </select>
-        <div className="trade-bundles">
-          <ResourceBundleEditor
-            title="给出"
-            resources={playerOffer}
-            available={player.resources}
-            onFocus={() => {
-              setTradeHintSource("player");
-              showPlayerTradeContext();
-            }}
-            onChange={setPlayerOffer}
-          />
-          <ResourceBundleEditor
-            title="换取"
-            resources={playerRequest}
-            onFocus={() => {
-              setTradeHintSource("player");
-              showPlayerTradeContext();
-            }}
-            onChange={setPlayerRequest}
-          />
-        </div>
-        <div className="inline-actions">
-          <button
-            disabled={!canOffer}
-            onClick={() =>
-              submit({
-                type: "playerTrade",
-                targetPlayerId:
-                  tradeTarget === PUBLIC_TRADE_TARGET || tradeTarget === state.currentPlayerId ? undefined : tradeTarget,
-                offer: playerOffer,
-                request: playerRequest
-              })
-            }
-          >
-            提出交易
-          </button>
-          <button
-            onClick={() => {
-              setTradeGive("");
-              setTradeReceive("");
-              setTradeTarget(PUBLIC_TRADE_TARGET);
-              setPlayerOffer(createResources());
-              setPlayerRequest(createResources());
-              setTradeHintSource(undefined);
-            }}
-          >
-            清空
-          </button>
-        </div>
+          银行 / 黑市
+        </button>
+        <button
+          type="button"
+          className={tradeMode === "player" ? "active" : ""}
+          aria-pressed={tradeMode === "player"}
+          onClick={() => {
+            setTradeMode("player");
+            setTradeHintSource(hasPlayerTradeHint ? "player" : undefined);
+          }}
+        >
+          玩家报价
+        </button>
       </div>
+
+      {tradeMode === "bank" ? (
+        <div className="trade-panel-box action-subsection">
+          <div className="bank-resource-choices">
+            <ResourceChoiceButtons
+              label="选择支出"
+              selected={tradeGive}
+              onSelect={(resource) => {
+                setTradeHintSource("bank");
+                setTradeGive(resource);
+              }}
+            />
+            <ResourceChoiceButtons
+              label="选择获得"
+              selected={tradeReceive}
+              onSelect={(resource) => {
+                setTradeHintSource("bank");
+                setTradeReceive(resource);
+              }}
+            />
+          </div>
+          <div className="inline-actions trade-panel-actions">
+            <button
+              disabled={!canBankTrade}
+              onClick={() => {
+                if (!tradeGive || !tradeReceive) return;
+                submit({ type: "bankTrade", give: tradeGive, receive: tradeReceive });
+              }}
+            >
+              {bestRate}:1 兑换
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="trade-panel-box player-trade-box">
+          <select
+            value={tradeTarget}
+            onFocus={() => {
+              setTradeHintSource("player");
+              showPlayerTradeContext();
+            }}
+            onChange={(event) => {
+              setTradeHintSource("player");
+              setTradeTarget(event.target.value);
+            }}
+          >
+            <option value={PUBLIC_TRADE_TARGET}>向所有玩家公开报价</option>
+            {state.players
+              .filter((item) => item.id !== state.currentPlayerId)
+              .map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+          </select>
+          <div className="trade-bundles">
+            <ResourceBundleEditor
+              title="给出"
+              resources={playerOffer}
+              available={player.resources}
+              onFocus={() => {
+                setTradeHintSource("player");
+                showPlayerTradeContext();
+              }}
+              onChange={setPlayerOffer}
+            />
+            <ResourceBundleEditor
+              title="换取"
+              resources={playerRequest}
+              onFocus={() => {
+                setTradeHintSource("player");
+                showPlayerTradeContext();
+              }}
+              onChange={setPlayerRequest}
+            />
+          </div>
+          <div className="inline-actions">
+            <button
+              disabled={!canOffer}
+              onClick={() =>
+                submit({
+                  type: "playerTrade",
+                  targetPlayerId:
+                    tradeTarget === PUBLIC_TRADE_TARGET || tradeTarget === state.currentPlayerId ? undefined : tradeTarget,
+                  offer: playerOffer,
+                  request: playerRequest
+                })
+              }
+            >
+              提出交易
+            </button>
+            <button
+              onClick={() => {
+                setTradeTarget(PUBLIC_TRADE_TARGET);
+                setPlayerOffer(createResources());
+                setPlayerRequest(createResources());
+                setTradeHintSource(undefined);
+              }}
+            >
+              清空
+            </button>
+          </div>
+        </div>
+      )}
     </section>
+  );
+}
+
+function ResourceChoiceButtons({
+  label,
+  selected,
+  onSelect
+}: {
+  label: string;
+  selected: Resource | "";
+  onSelect: (resource: Resource) => void;
+}) {
+  return (
+    <div className="bank-resource-choice" role="group" aria-label={label}>
+      <strong>{label}</strong>
+      <div className="resource-buttons compact-resource-buttons">
+        {RESOURCES.map((resource) => (
+          <button
+            key={resource}
+            type="button"
+            className={selected === resource ? "selected" : ""}
+            aria-pressed={selected === resource}
+            onClick={() => onSelect(resource)}
+          >
+            {resourceIconAssets[resource].imageUrl && (
+              <AssetIcon
+                src={resourceIconAssets[resource].imageUrl}
+                className={`resource-choice-asset-icon resource-choice-asset-icon-${resource}`}
+              />
+            )}
+            <span>{RESOURCE_LABELS[resource]}</span>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 

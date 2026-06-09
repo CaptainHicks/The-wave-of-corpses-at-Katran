@@ -18,6 +18,7 @@ import {
   legalConvoyMoveFromEdges,
   legalConvoyMoveToEdges,
   legalBuildEdges,
+  legalDevelopmentRouteEdges,
   legalInitialCampVertices,
   legalInitialRouteEdges,
   legalExpelZombieMilitiaIds,
@@ -714,6 +715,9 @@ describe("setup and production", () => {
     expect(emptyEdge).toBeTruthy();
     expect(routeTypeAllowedOnEdge(state.board, emptyEdge!.id, "transport")).toBe(false);
     expect(routeTypeAllowedOnEdge(state.board, emptyEdge!.id, "convoy")).toBe(true);
+    Object.values(state.board.tiles).forEach((tile) => {
+      tile.revealed = true;
+    });
 
     const player = state.players[0];
     state.board.vertices[emptyEdge!.vertexIds[0]].building = { ownerId: player.id, type: "camp" };
@@ -1088,6 +1092,36 @@ describe("free action phase", () => {
     expect(state.players[0].militia.filter((militia) => militia.vertexId === vertexId)).toHaveLength(2);
     expect(state.players[0].pieces.militia).toBe(piecesBefore - 2);
     expect(state.players[0].devCards.some((card) => card.id === "militia-card")).toBe(false);
+  });
+
+  it("lets road crew build its second route from the first queued route", () => {
+    let state = actionGame();
+    const originalLegalEdges = new Set(legalDevelopmentRouteEdges(state));
+    const firstEdgeId = [...originalLegalEdges].find((edgeId) =>
+      legalDevelopmentRouteEdges(state, "transport", [{ edgeId, routeType: "transport" }]).some(
+        (candidateId) => !originalLegalEdges.has(candidateId)
+      )
+    );
+    expect(firstEdgeId).toBeTruthy();
+    const secondEdgeId = legalDevelopmentRouteEdges(state, "transport", [
+      { edgeId: firstEdgeId!, routeType: "transport" }
+    ]).find((edgeId) => !originalLegalEdges.has(edgeId));
+    expect(secondEdgeId).toBeTruthy();
+
+    state.players[0].devCards.push({ id: "road-crew-card", type: "roadCrew", purchasedTurn: 0 });
+    state = applyCommand(state, {
+      type: "playDevelopmentCard",
+      cardId: "road-crew-card",
+      payload: {
+        routes: [
+          { edgeId: firstEdgeId, routeType: "transport" },
+          { edgeId: secondEdgeId, routeType: "transport" }
+        ]
+      }
+    });
+
+    expect(state.board.edges[firstEdgeId!].route).toMatchObject({ ownerId: state.currentPlayerId, type: "transport" });
+    expect(state.board.edges[secondEdgeId!].route).toMatchObject({ ownerId: state.currentPlayerId, type: "transport" });
   });
 
   it("awards one victory point when a player first camps in a new resource zone", () => {

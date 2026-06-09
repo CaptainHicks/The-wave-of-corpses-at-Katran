@@ -116,6 +116,11 @@ export function RightOperationDock({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  useEffect(() => {
+    if (!selection?.kind.startsWith("dev")) return;
+    setActiveTab("development");
+  }, [selection?.kind]);
+
   return (
     <aside className="right-operation-dock" data-mode={mode} aria-label="右侧操作窗口">
       <section className="panel dock-title">
@@ -136,7 +141,7 @@ export function RightOperationDock({
       </div>
 
       {canInteract && mode !== "pending" && (
-        <SelectionPanel state={state} selection={selection} setSelection={setSelection} submit={submit} />
+        <SelectionPanel selection={selection} setSelection={setSelection} />
       )}
 
       {canInteract && mode === "pending" && (
@@ -205,11 +210,15 @@ export function RightOperationDock({
             />
           )}
           {activeTab === "development" && (
-            <BuyDevelopmentCardAction
-              key={panelRefreshKey}
-              state={state}
-              submit={submit}
-            />
+            isDevelopmentCardSelection(selection) ? (
+              <DevelopmentCardControls selection={selection} setSelection={setSelection} submit={submit} />
+            ) : (
+              <BuyDevelopmentCardAction
+                key={panelRefreshKey}
+                state={state}
+                submit={submit}
+              />
+            )
           )}
         </section>
       )}
@@ -341,18 +350,13 @@ function formatTimer(seconds: number): string {
 }
 
 function SelectionPanel({
-  state,
   selection,
-  setSelection,
-  submit
+  setSelection
 }: {
-  state: GameState;
   selection?: UiSelection;
   setSelection: Dispatch<SetStateAction<UiSelection | undefined>>;
-  submit: (command: Command) => void;
 }) {
   if (!selection) return null;
-  const currentPlayer = state.players.find((player) => player.id === state.currentPlayerId);
   const cancel = <button onClick={() => setSelection(undefined)}>取消</button>;
 
   if (selection.kind === "moveConvoy") {
@@ -389,21 +393,31 @@ function SelectionPanel({
     );
   }
 
+  return null;
+}
+
+function DevelopmentCardControls({
+  selection,
+  setSelection,
+  submit
+}: {
+  selection: Extract<UiSelection, { kind: `dev${string}` }>;
+  setSelection: Dispatch<SetStateAction<UiSelection | undefined>>;
+  submit: (command: Command) => void;
+}) {
+  const cancel = <button onClick={() => setSelection(undefined)}>取消使用</button>;
+
   if (selection.kind === "devMerchant") {
     return (
-      <div className="selection-panel dock-selection-panel">
-        <strong>商人</strong>
-        <p>点击一个与 {currentPlayer?.name} 建筑相邻的已翻开资源地块。</p>
-        {cancel}
-      </div>
+      <section className="action-pane development-card-controls">
+        <div className="inline-actions">{cancel}</div>
+      </section>
     );
   }
 
   if (selection.kind === "devMilitia") {
     return (
-      <div className="selection-panel dock-selection-panel">
-        <strong>民兵动员</strong>
-        <p>点击己方营地或堡垒部署最多两个民兵；每处最多两个。</p>
+      <section className="action-pane development-card-controls">
         <div className="inline-actions">
           <button
             disabled={selection.vertexIds.length === 0}
@@ -419,15 +433,13 @@ function SelectionPanel({
           </button>
           {cancel}
         </div>
-      </div>
+      </section>
     );
   }
 
   if (selection.kind === "devRequisition") {
     return (
-      <div className="selection-panel dock-selection-panel">
-        <strong>征用物资</strong>
-        <p>选择一种资源，征用所有其他玩家手中的该资源。</p>
+      <section className="action-pane development-card-controls">
         <div className="resource-buttons requisition-resource-buttons">
           {RESOURCES.map((resource) => (
             <button
@@ -441,21 +453,22 @@ function SelectionPanel({
               }
             >
               {resourceIconAssets[resource].imageUrl && (
-                <AssetIcon src={resourceIconAssets[resource].imageUrl} className="inline-action-asset-icon" />
+                <AssetIcon
+                  src={resourceIconAssets[resource].imageUrl}
+                  className={`resource-choice-asset-icon resource-choice-asset-icon-${resource}`}
+                />
               )}
               {RESOURCE_LABELS[resource]}
             </button>
           ))}
         </div>
         {cancel}
-      </div>
+      </section>
     );
   }
 
   return (
-    <div className="selection-panel dock-selection-panel">
-      <strong>开路队</strong>
-      <p>选择路线类型后点击最多两条合法边；运输线仍不能放在两个空地之间。</p>
+    <section className="action-pane development-card-controls">
       <div className="segmented small">
         {(["transport", "convoy"] as RouteType[]).map((routeType) => (
           <button
@@ -482,8 +495,14 @@ function SelectionPanel({
         </button>
         {cancel}
       </div>
-    </div>
+    </section>
   );
+}
+
+function isDevelopmentCardSelection(
+  selection?: UiSelection
+): selection is Extract<UiSelection, { kind: `dev${string}` }> {
+  return Boolean(selection?.kind.startsWith("dev"));
 }
 
 function VictoryPanel({ state }: { state: GameState }) {

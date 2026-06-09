@@ -56,5 +56,8 @@ describe("EdgeRoute piece assets", () => {
       "href",
       "/assets/board/routes/purple/transport.v1.webp"
     );
+    expect(container.querySelector(".edge-route-group")?.getAttribute("style")).toContain(
+      "--route-glow: rgba(142, 91, 183, 0.48)"
+    );
   });
 });

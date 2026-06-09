@@ -389,10 +389,10 @@ describe("RightOperationDock", () => {
         onClear={vi.fn()}
       />
     );
-    const selects = () => container.querySelectorAll<HTMLSelectElement>(".trade-row select");
+    const giveMetal = () => within(screen.getByRole("group", { name: "选择支出" })).getByRole("button", { name: "金属" });
 
-    fireEvent.change(selects()[0], { target: { value: "metal" } });
-    expect(selects()[0].value).toBe("metal");
+    fireEvent.click(giveMetal());
+    expect(giveMetal()).toHaveAttribute("aria-pressed", "true");
 
     rerender(
       <RightOperationDock
@@ -409,15 +409,15 @@ describe("RightOperationDock", () => {
       />
     );
 
-    await waitFor(() => expect(selects()[0].value).toBe(""));
+    await waitFor(() => expect(giveMetal()).toHaveAttribute("aria-pressed", "false"));
     expect(setTool).toHaveBeenLastCalledWith("none");
     expect(setSelection).toHaveBeenLastCalledWith(undefined);
   });
 
-  it("submits the selected resource for requisition", () => {
+  it("shows development card controls inside the development action area without a temporary selection panel", () => {
     const state = setupActionState();
     const submit = vi.fn();
-    render(
+    const { container } = render(
       <RightOperationDock
         state={state}
         mode="freeAction"
@@ -433,9 +433,12 @@ describe("RightOperationDock", () => {
       />
     );
 
-    const panel = screen.getByText("征用物资").closest(".selection-panel");
-    expect(panel).toBeTruthy();
-    fireEvent.click(within(panel as HTMLElement).getByRole("button", { name: "木材" }));
+    expect(container.querySelector(".dock-selection-panel")).toBeNull();
+    expect(screen.getByRole("tab", { name: /发展/ })).toHaveAttribute("aria-selected", "true");
+    const controls = container.querySelector(".development-card-controls");
+    expect(controls).toBeTruthy();
+    expect(screen.queryByText("征用物资")).not.toBeInTheDocument();
+    fireEvent.click(within(controls as HTMLElement).getByRole("button", { name: "木材" }));
 
     expect(submit).toHaveBeenCalledWith({
       type: "playDevelopmentCard",
@@ -461,14 +464,19 @@ describe("RightOperationDock", () => {
       />
     );
 
-    const selects = container.querySelectorAll<HTMLSelectElement>(".trade-row select");
     const bankTradeButton = container.querySelector<HTMLButtonElement>(".trade-panel-actions button");
+
+    expect(screen.getByRole("button", { name: "银行 / 黑市" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "玩家报价" })).toHaveAttribute("aria-pressed", "false");
+    expect(container.querySelectorAll(".bank-resource-choice button[aria-pressed='true']")).toHaveLength(0);
+    expect(bankTradeButton).toBeDisabled();
+    expect(container.querySelector(".player-trade-box")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "玩家报价" }));
+
     const offerCounts = container.querySelectorAll<HTMLElement>(".player-trade-box .resource-stepper b");
     const offerButton = container.querySelector<HTMLButtonElement>(".player-trade-box .inline-actions button");
-
-    expect(selects[0].value).toBe("");
-    expect(selects[1].value).toBe("");
-    expect(bankTradeButton).toBeDisabled();
+    expect(container.querySelector(".bank-resource-choices")).toBeNull();
     expect([...offerCounts].every((item) => item.textContent === "0")).toBe(true);
     expect(offerButton).toBeDisabled();
   });
@@ -492,9 +500,10 @@ describe("RightOperationDock", () => {
       />
     );
 
-    const bankSelects = container.querySelectorAll<HTMLSelectElement>(".trade-row select");
-    fireEvent.change(bankSelects[0], { target: { value: "food" } });
-    fireEvent.change(bankSelects[1], { target: { value: "metal" } });
+    const giveChoices = within(screen.getByRole("group", { name: "选择支出" }));
+    const receiveChoices = within(screen.getByRole("group", { name: "选择获得" }));
+    fireEvent.click(giveChoices.getByRole("button", { name: "食物" }));
+    fireEvent.click(receiveChoices.getByRole("button", { name: "金属" }));
 
     await waitFor(() =>
       expect(setOperationContext).toHaveBeenLastCalledWith({
@@ -506,6 +515,7 @@ describe("RightOperationDock", () => {
       })
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "玩家报价" }));
     const playerTradeBox = container.querySelector<HTMLElement>(".player-trade-box");
     expect(playerTradeBox).toBeTruthy();
     const offerEditor = playerTradeBox!.querySelector<HTMLElement>(".resource-editor");

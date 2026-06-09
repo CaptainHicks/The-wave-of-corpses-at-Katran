@@ -1,6 +1,7 @@
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { applyCommand } from "../../domain/rules";
+import { applyCommand, legalInitialCampVertices } from "../../domain/rules";
+import type { GameState } from "../../domain/types";
 import { GameShell } from "../../ui/GameShell";
 
 function players() {
@@ -11,11 +12,12 @@ function players() {
   ];
 }
 
-function renderGameShell() {
-  const state = applyCommand(undefined, { type: "createGame", players: players(), seed: "map-view-zoom" });
+function renderGameShell(options: { state?: GameState; submit?: ReturnType<typeof vi.fn> } = {}) {
+  const state = options.state ?? applyCommand(undefined, { type: "createGame", players: players(), seed: "map-view-zoom" });
   const setSelection = vi.fn();
+  const submit = options.submit ?? vi.fn();
 
-  return render(
+  const view = render(
     <GameShell
       state={state}
       privacy={false}
@@ -28,11 +30,12 @@ function renderGameShell() {
       onClosePrivacy={vi.fn()}
       onDismissError={vi.fn()}
       onClear={vi.fn()}
-      submit={vi.fn()}
+      submit={submit}
       setTool={vi.fn()}
       setSelection={setSelection}
     />
   );
+  return { ...view, state, submit };
 }
 
 function renderGameShellWithSiegeAlert() {
@@ -84,7 +87,7 @@ function readMapScaleTransform(element: HTMLElement) {
 }
 
 function dispatchPointerEvent(
-  target: HTMLElement,
+  target: Element,
   type: "pointerdown" | "pointermove" | "pointerup",
   init: { pointerId: number; button?: number; buttons?: number; clientX: number; clientY: number; pointerType?: string }
 ) {
@@ -246,6 +249,92 @@ describe("GameShell map view", () => {
 
     expect(readMapPanTransform(world).x).toBeCloseTo(0);
     expect(readMapPanTransform(world).y).toBeCloseTo(0);
+  });
+
+  it("leaves single touch taps on board targets for the board click handler", () => {
+    const state = applyCommand(undefined, { type: "createGame", players: players(), seed: "touch-tap-board-target" });
+    const submit = vi.fn();
+    const { container } = renderGameShell({ state, submit });
+    const vertexId = legalInitialCampVertices(state)[0];
+    const target = container.querySelector(`[data-vertex-id="${vertexId}"]`)!;
+
+    dispatchPointerEvent(target, "pointerdown", {
+      pointerId: 1,
+      clientX: 420,
+      clientY: 320,
+      pointerType: "touch"
+    });
+    dispatchPointerEvent(target, "pointerup", {
+      pointerId: 1,
+      clientX: 420,
+      clientY: 320,
+      pointerType: "touch"
+    });
+    fireEvent.click(target);
+
+    expect(HTMLElement.prototype.setPointerCapture).not.toHaveBeenCalled();
+    expect(submit).toHaveBeenCalledWith({ type: "placeInitialCamp", vertexId });
+  });
+
+  it("leaves single touch taps on zombie move tiles for the tile click handler", () => {
+    const state = applyCommand(undefined, { type: "createGame", players: players(), seed: "touch-tap-zombie-tile" });
+    const tileId = Object.values(state.board.tiles).find((tile) => tile.revealed && tile.id !== state.zombieTileId)!.id;
+    const pendingState: GameState = {
+      ...state,
+      phase: "zombie",
+      pending: {
+        kind: "moveZombie",
+        playerId: state.currentPlayerId,
+        stealAfterMove: true
+      }
+    };
+    const submit = vi.fn();
+    const { container } = renderGameShell({ state: pendingState, submit });
+    const target = container.querySelector(`[data-tile-id="${tileId}"]`)!;
+
+    dispatchPointerEvent(target, "pointerdown", {
+      pointerId: 1,
+      clientX: 420,
+      clientY: 320,
+      pointerType: "touch"
+    });
+    dispatchPointerEvent(target, "pointerup", {
+      pointerId: 1,
+      clientX: 420,
+      clientY: 320,
+      pointerType: "touch"
+    });
+    fireEvent.click(target);
+
+    expect(HTMLElement.prototype.setPointerCapture).not.toHaveBeenCalled();
+    expect(submit).toHaveBeenCalledWith({ type: "moveZombie", tileId });
+  });
+
+  it("captures board-target touch gestures once they become a map pan", async () => {
+    const state = applyCommand(undefined, { type: "createGame", players: players(), seed: "touch-pan-from-board-target" });
+    const { container } = renderGameShell({ state });
+    const layer = container.querySelector(".map-layer") as HTMLElement;
+    const world = container.querySelector(".map-world") as HTMLElement;
+    const vertexId = legalInitialCampVertices(state)[0];
+    const target = container.querySelector(`[data-vertex-id="${vertexId}"]`)!;
+
+    dispatchPointerEvent(target, "pointerdown", {
+      pointerId: 1,
+      clientX: 420,
+      clientY: 320,
+      pointerType: "touch"
+    });
+    dispatchPointerEvent(layer, "pointermove", {
+      pointerId: 1,
+      buttons: 1,
+      clientX: 452,
+      clientY: 348,
+      pointerType: "touch"
+    });
+
+    expect(HTMLElement.prototype.setPointerCapture).toHaveBeenCalledWith(1);
+    await waitFor(() => expect(readMapPanTransform(world).x).toBeCloseTo(32));
+    expect(readMapPanTransform(world).y).toBeCloseTo(28);
   });
 
   it("supports pinch zoom and two-finger panning on touch devices", async () => {

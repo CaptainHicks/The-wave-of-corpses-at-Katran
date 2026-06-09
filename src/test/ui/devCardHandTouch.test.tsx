@@ -60,6 +60,31 @@ function firePointer(
   fireEvent(target, event);
 }
 
+function touchList(items: Array<{ identifier: number; clientX: number; clientY: number }>): TouchList {
+  const list = {
+    length: items.length,
+    item: (index: number) => (items[index] as Touch | undefined) ?? null
+  } as TouchList & Record<number, Touch>;
+  items.forEach((item, index) => {
+    list[index] = item as Touch;
+  });
+  return list;
+}
+
+function fireTouch(
+  target: Document | Node | Element | Window,
+  type: "touchstart" | "touchmove" | "touchend",
+  init: { identifier: number; clientX: number; clientY: number }
+) {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  const currentTouches = type === "touchend" ? [] : [init];
+  Object.defineProperties(event, {
+    touches: { value: touchList(currentTouches) },
+    changedTouches: { value: touchList([init]) }
+  });
+  fireEvent(target, event);
+}
+
 function mockCoarsePointer(matches: boolean) {
   window.matchMedia = vi.fn().mockImplementation(() => ({
     matches,
@@ -265,6 +290,75 @@ describe("DevCardHand touch interactions", () => {
     firePointer(window, "pointermove", { pointerId: 2, pointerType: "touch", clientX: 50, clientY: 205 });
     firePointer(window, "pointerup", { pointerId: 2, pointerType: "touch", clientX: 50, clientY: 205 });
 
+    expect(submit).toHaveBeenCalledWith({ type: "playDevelopmentCard", cardId: "dev-1" });
+  });
+
+  it("uses stage-scaled pull distance on mobile-sized game shells", () => {
+    const player = createPlayer();
+    const submit = vi.fn();
+    const { container } = render(
+      <div className="game-shell">
+        <DevCardHand
+          state={createState(player)}
+          player={player}
+          submit={submit}
+          setTool={vi.fn()}
+          setSelection={vi.fn()}
+        />
+      </div>
+    );
+
+    const hand = container.querySelector(".dev-card-hand") as HTMLElement;
+    const card = container.querySelector(".dev-hand-card") as HTMLElement;
+    Object.defineProperty(hand, "offsetWidth", { configurable: true, value: 1000 });
+    hand.getBoundingClientRect = vi.fn(
+      () =>
+        ({
+          left: 0,
+          top: 0,
+          right: 500,
+          bottom: 200,
+          width: 500,
+          height: 200,
+          x: 0,
+          y: 0,
+          toJSON: () => ({})
+        }) as DOMRect
+    );
+    elementFromPointMock.mockReturnValue(card);
+
+    firePointer(card, "pointerdown", { pointerId: 1, pointerType: "touch", clientX: 50, clientY: 300 });
+    firePointer(window, "pointermove", { pointerId: 1, pointerType: "touch", clientX: 50, clientY: 255 });
+    expect(card).toHaveClass("touch-play-ready");
+
+    firePointer(window, "pointerup", { pointerId: 1, pointerType: "touch", clientX: 50, clientY: 255 });
+    expect(submit).toHaveBeenCalledWith({ type: "playDevelopmentCard", cardId: "dev-1" });
+  });
+
+  it("plays a pulled card through touch events when pointer events are cancelled by the browser", () => {
+    const player = createPlayer();
+    const submit = vi.fn();
+    const { container } = render(
+      <DevCardHand
+        state={createState(player)}
+        player={player}
+        submit={submit}
+        setTool={vi.fn()}
+        setSelection={vi.fn()}
+      />
+    );
+
+    const card = container.querySelector(".dev-hand-card") as HTMLElement;
+    elementFromPointMock.mockReturnValue(card);
+
+    fireTouch(card, "touchstart", { identifier: 7, clientX: 50, clientY: 300 });
+    firePointer(window, "pointermove", { pointerId: 1, pointerType: "touch", clientX: 50, clientY: 205 });
+    expect(card).not.toHaveClass("touch-play-ready");
+
+    fireTouch(window, "touchmove", { identifier: 7, clientX: 50, clientY: 205 });
+    expect(card).toHaveClass("touch-play-ready");
+
+    fireTouch(window, "touchend", { identifier: 7, clientX: 50, clientY: 205 });
     expect(submit).toHaveBeenCalledWith({ type: "playDevelopmentCard", cardId: "dev-1" });
   });
 

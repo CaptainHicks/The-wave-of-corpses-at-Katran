@@ -169,7 +169,9 @@ export function BoardView({
     canInteract && selection?.kind === "devMilitia" ? legalMilitiaMobilizationVertices(state) : []
   );
   const legalDevRouteEdgeSet = new Set(
-    canInteract && selection?.kind === "devRoadCrew" ? legalDevelopmentRouteEdges(state, selection.routeType) : []
+    canInteract && selection?.kind === "devRoadCrew"
+      ? legalDevelopmentRouteEdges(state, selection.routeType, selection.routes)
+      : []
   );
   const legalDowngradeFortressVertexSet = new Set(
     canInteract && state.pending?.kind === "downgradeFortress" ? state.pending.vertexIds : []
@@ -197,9 +199,7 @@ export function BoardView({
       });
   }
   const selectableMoveMilitiaVertexSet = new Set(selectableMoveMilitiaByVertex.keys());
-  const legalTileOutlineIds = [...new Set([...legalExpelZombieTileSet, ...legalMerchantTileSet])].filter(
-    (tileId) => state.board.tiles[tileId]
-  );
+  const legalTileOutlineIds = [...legalMerchantTileSet].filter((tileId) => state.board.tiles[tileId]);
   const hasCost = (cost: Partial<Resources>) =>
     Boolean(
       actingPlayer &&
@@ -591,6 +591,52 @@ export function BoardView({
           <rect width="10" height="10" fill="#60666a" />
           <path d="M0 10L10 0" stroke="#7c858a" strokeWidth="1" />
         </pattern>
+        <filter id="selection-white-outline" x="-60%" y="-60%" width="220%" height="220%" colorInterpolationFilters="sRGB">
+          <feMorphology in="SourceAlpha" operator="dilate" radius="1.5" result="expanded" />
+          <feFlood floodColor="#ffffff" floodOpacity="0.96" result="outlineColor" />
+          <feComposite in="outlineColor" in2="expanded" operator="in" result="expandedColor" />
+          <feComposite in="expandedColor" in2="SourceAlpha" operator="out" result="outline" />
+          <feGaussianBlur in="outline" stdDeviation="0.35" result="softOutline" />
+          <feMerge>
+            <feMergeNode in="softOutline" />
+            <feMergeNode in="outline" />
+          </feMerge>
+        </filter>
+        <filter id="selection-gold-outline" x="-60%" y="-60%" width="220%" height="220%" colorInterpolationFilters="sRGB">
+          <feMorphology in="SourceAlpha" operator="dilate" radius="1.65" result="expanded" />
+          <feFlood floodColor="#fff0a2" floodOpacity="0.98" result="outlineColor" />
+          <feComposite in="outlineColor" in2="expanded" operator="in" result="expandedColor" />
+          <feComposite in="expandedColor" in2="SourceAlpha" operator="out" result="outline" />
+          <feGaussianBlur in="outline" stdDeviation="0.45" result="softOutline" />
+          <feMerge>
+            <feMergeNode in="softOutline" />
+            <feMergeNode in="outline" />
+          </feMerge>
+        </filter>
+        <filter id="selection-white-preview" x="-60%" y="-60%" width="220%" height="220%" colorInterpolationFilters="sRGB">
+          <feMorphology in="SourceAlpha" operator="dilate" radius="1.5" result="expanded" />
+          <feFlood floodColor="#ffffff" floodOpacity="0.96" result="outlineColor" />
+          <feComposite in="outlineColor" in2="expanded" operator="in" result="expandedColor" />
+          <feComposite in="expandedColor" in2="SourceAlpha" operator="out" result="outline" />
+          <feGaussianBlur in="outline" stdDeviation="0.35" result="softOutline" />
+          <feMerge>
+            <feMergeNode in="softOutline" />
+            <feMergeNode in="outline" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+        <filter id="selection-gold-preview" x="-60%" y="-60%" width="220%" height="220%" colorInterpolationFilters="sRGB">
+          <feMorphology in="SourceAlpha" operator="dilate" radius="1.65" result="expanded" />
+          <feFlood floodColor="#fff0a2" floodOpacity="0.98" result="outlineColor" />
+          <feComposite in="outlineColor" in2="expanded" operator="in" result="expandedColor" />
+          <feComposite in="expandedColor" in2="SourceAlpha" operator="out" result="outline" />
+          <feGaussianBlur in="outline" stdDeviation="0.45" result="softOutline" />
+          <feMerge>
+            <feMergeNode in="softOutline" />
+            <feMergeNode in="outline" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
       </defs>
 
       {Object.values(state.board.tiles).map((tile) => (
@@ -600,7 +646,7 @@ export function BoardView({
           points={polygonForTile(tile.id)}
           hasZombie={state.zombieTileId === tile.id}
           hasMerchant={state.merchant.tileId === tile.id}
-          legal={legalExpelZombieTileSet.has(tile.id) || legalMerchantTileSet.has(tile.id)}
+          legal={legalMerchantTileSet.has(tile.id)}
           onClick={() => clickTile(tile.id)}
         />
       ))}

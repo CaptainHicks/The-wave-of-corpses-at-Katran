@@ -23,6 +23,7 @@
   box-sizing: border-box;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 *::-webkit-scrollbar {
@@ -59,6 +60,7 @@ svg image {
   user-select: none;
   -webkit-user-select: none;
   -webkit-user-drag: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .sr-only {
@@ -101,6 +103,12 @@ button {
     border-color: #6e614d;
     background: #fff5dc;
   }
+}
+
+button:active:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: #6e614d;
+  background: #fff5dc;
 }
 
 button:disabled {
@@ -698,6 +706,7 @@ textarea {
     0 0 44px rgba(240, 151, 72, 0.12),
     0 28px 76px rgba(0, 0, 0, 0.66),
     inset 0 0 0 1px rgba(255, 238, 186, 0.08);
+  -webkit-backdrop-filter: blur(9px);
   backdrop-filter: blur(9px);
 }
 
@@ -955,6 +964,7 @@ textarea {
     0 0 0 1px rgba(255, 224, 160, 0.08),
     0 22px 60px rgba(0, 0, 0, 0.58),
     inset 0 0 0 1px rgba(255, 236, 181, 0.06);
+  -webkit-backdrop-filter: blur(5px);
   backdrop-filter: blur(5px);
 }
 
@@ -3551,13 +3561,6 @@ textarea {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .start-screen-ambient .start-menu-button,
-  .start-screen-ambient .start-menu-panel {
-    animation: none;
-  }
-}
-
 .app-shell {
   min-height: 100vh;
   padding: 18px;
@@ -3608,6 +3611,7 @@ textarea {
     linear-gradient(180deg, rgba(57, 38, 31, 0.82), rgba(24, 21, 18, 0.72)),
     rgba(20, 18, 15, 0.7);
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.26);
+  -webkit-backdrop-filter: blur(5px);
   backdrop-filter: blur(5px);
   text-align: center;
   pointer-events: none;
@@ -3632,6 +3636,14 @@ textarea {
   width: 100%;
   height: min(74vh, 760px);
   display: block;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.board-svg *,
+.tile-group,
+.edge-route-group,
+.vertex {
+  -webkit-tap-highlight-color: transparent;
 }
 
 .tile {
@@ -3798,7 +3810,12 @@ textarea {
     saturate(1.32)
     brightness(1.1)
     drop-shadow(0 2px 2px rgba(20, 16, 10, 0.38))
-    drop-shadow(0 0 5px color-mix(in srgb, var(--route-color, #f2c14e) 42%, transparent));
+    drop-shadow(0 0 5px rgba(242, 193, 78, 0.42));
+  filter:
+    saturate(1.32)
+    brightness(1.1)
+    drop-shadow(0 2px 2px rgba(20, 16, 10, 0.38))
+    drop-shadow(0 0 5px var(--route-glow-edge, rgba(242, 193, 78, 0.42)));
 }
 
 .edge.route-convoy {
@@ -3824,7 +3841,14 @@ textarea {
     brightness(1.14)
     drop-shadow(0 0 1.2px rgba(255, 247, 219, 0.42))
     drop-shadow(0 2px 3px rgba(20, 16, 10, 0.54))
-    drop-shadow(0 0 8px color-mix(in srgb, var(--route-color, #f2c14e) 48%, transparent));
+    drop-shadow(0 0 8px rgba(242, 193, 78, 0.48));
+  filter:
+    saturate(1.72)
+    contrast(1.2)
+    brightness(1.14)
+    drop-shadow(0 0 1.2px rgba(255, 247, 219, 0.42))
+    drop-shadow(0 2px 3px rgba(20, 16, 10, 0.54))
+    drop-shadow(0 0 8px var(--route-glow, rgba(242, 193, 78, 0.48)));
 }
 
 .route-piece-transport {
@@ -3834,7 +3858,14 @@ textarea {
     brightness(1.15)
     drop-shadow(0 0 1.2px rgba(255, 247, 219, 0.44))
     drop-shadow(0 2px 3px rgba(20, 16, 10, 0.54))
-    drop-shadow(0 0 9px color-mix(in srgb, var(--route-color, #f2c14e) 50%, transparent));
+    drop-shadow(0 0 9px rgba(242, 193, 78, 0.5));
+  filter:
+    saturate(1.82)
+    contrast(1.22)
+    brightness(1.15)
+    drop-shadow(0 0 1.2px rgba(255, 247, 219, 0.44))
+    drop-shadow(0 2px 3px rgba(20, 16, 10, 0.54))
+    drop-shadow(0 0 9px var(--route-glow-transport, rgba(242, 193, 78, 0.5)));
 }
 
 .route-piece-convoy {
@@ -3844,36 +3875,25 @@ textarea {
     brightness(1.16)
     drop-shadow(0 0 1.25px rgba(255, 247, 219, 0.46))
     drop-shadow(0 2px 4px rgba(20, 16, 10, 0.58))
-    drop-shadow(0 0 10px color-mix(in srgb, var(--route-color, #f2c14e) 56%, transparent));
+    drop-shadow(0 0 10px rgba(242, 193, 78, 0.56));
+  filter:
+    saturate(1.9)
+    contrast(1.24)
+    brightness(1.16)
+    drop-shadow(0 0 1.25px rgba(255, 247, 219, 0.46))
+    drop-shadow(0 2px 4px rgba(20, 16, 10, 0.58))
+    drop-shadow(0 0 10px var(--route-glow-convoy, rgba(242, 193, 78, 0.56)));
 }
 
 .route-piece-preview {
   opacity: 0.68;
-  filter:
-    saturate(1.42)
-    contrast(1.12)
-    brightness(1.06)
-    drop-shadow(1.35px 0 0 rgba(255, 255, 255, 0.94))
-    drop-shadow(-1.35px 0 0 rgba(255, 255, 255, 0.94))
-    drop-shadow(0 1.35px 0 rgba(255, 255, 255, 0.94))
-    drop-shadow(0 -1.35px 0 rgba(255, 255, 255, 0.94))
-    drop-shadow(0 1px 2px rgba(20, 16, 10, 0.46))
-    drop-shadow(0 0 8px color-mix(in srgb, var(--route-color, #f2c14e) 36%, rgba(255, 255, 255, 0.24)));
+  filter: url("#selection-white-preview");
   animation: selection-white-edge-blink 1.25s ease-in-out infinite;
 }
 
 .route-piece-preview.is-selected {
   opacity: 0.8;
-  filter:
-    saturate(1.5)
-    contrast(1.14)
-    brightness(1.08)
-    drop-shadow(1.45px 0 0 rgba(255, 240, 162, 0.96))
-    drop-shadow(-1.45px 0 0 rgba(255, 240, 162, 0.96))
-    drop-shadow(0 1.45px 0 rgba(255, 240, 162, 0.96))
-    drop-shadow(0 -1.45px 0 rgba(255, 240, 162, 0.96))
-    drop-shadow(0 1px 2px rgba(20, 16, 10, 0.5))
-    drop-shadow(0 0 9px color-mix(in srgb, var(--route-color, #f2c14e) 48%, rgba(242, 193, 78, 0.28)));
+  filter: url("#selection-gold-preview");
   animation: selection-white-edge-blink-strong 1.05s ease-in-out infinite;
 }
 
@@ -3883,39 +3903,20 @@ textarea {
   pointer-events: stroke;
 }
 
-.edge-hitbox.coarse-hitbox,
-.edge.coarse-hitbox.legal {
+.edge-hitbox.coarse-hitbox {
   stroke-width: 24;
 }
 
 .route-piece-legal-outline {
   pointer-events: none;
   opacity: 0.68;
-  filter:
-    saturate(1.42)
-    contrast(1.12)
-    brightness(1.06)
-    drop-shadow(1.35px 0 0 rgba(255, 255, 255, 0.94))
-    drop-shadow(-1.35px 0 0 rgba(255, 255, 255, 0.94))
-    drop-shadow(0 1.35px 0 rgba(255, 255, 255, 0.94))
-    drop-shadow(0 -1.35px 0 rgba(255, 255, 255, 0.94))
-    drop-shadow(0 1px 2px rgba(20, 16, 10, 0.46))
-    drop-shadow(0 0 8px color-mix(in srgb, var(--route-color, #f2c14e) 36%, rgba(255, 255, 255, 0.24)));
+  filter: url("#selection-white-outline");
   animation: selection-white-edge-blink 1.25s ease-in-out infinite;
 }
 
 .route-piece-legal-outline.is-selected {
   opacity: 0.8;
-  filter:
-    saturate(1.5)
-    contrast(1.14)
-    brightness(1.08)
-    drop-shadow(1.45px 0 0 rgba(255, 240, 162, 0.96))
-    drop-shadow(-1.45px 0 0 rgba(255, 240, 162, 0.96))
-    drop-shadow(0 1.45px 0 rgba(255, 240, 162, 0.96))
-    drop-shadow(0 -1.45px 0 rgba(255, 240, 162, 0.96))
-    drop-shadow(0 1px 2px rgba(20, 16, 10, 0.5))
-    drop-shadow(0 0 9px color-mix(in srgb, var(--route-color, #f2c14e) 48%, rgba(242, 193, 78, 0.28)));
+  filter: url("#selection-gold-outline");
   animation: selection-white-edge-blink-strong 1.05s ease-in-out infinite;
 }
 
@@ -3958,12 +3959,6 @@ textarea {
   vector-effect: non-scaling-stroke;
 }
 
-.vertex.has-coarse-hit-area.legal .vertex-hit-area {
-  stroke: rgba(255, 255, 255, 0.72);
-  stroke-width: 2;
-  vector-effect: non-scaling-stroke;
-}
-
 .building-piece {
   pointer-events: none;
   filter:
@@ -3972,7 +3967,14 @@ textarea {
     brightness(1.13)
     drop-shadow(0 0 1.2px rgba(255, 247, 219, 0.38))
     drop-shadow(0 2px 3px rgba(20, 16, 10, 0.5))
-    drop-shadow(0 0 8px color-mix(in srgb, var(--piece-color, #f2c14e) 44%, transparent));
+    drop-shadow(0 0 8px rgba(242, 193, 78, 0.44));
+  filter:
+    saturate(1.74)
+    contrast(1.18)
+    brightness(1.13)
+    drop-shadow(0 0 1.2px rgba(255, 247, 219, 0.38))
+    drop-shadow(0 2px 3px rgba(20, 16, 10, 0.5))
+    drop-shadow(0 0 8px var(--piece-glow, rgba(242, 193, 78, 0.44)));
 }
 
 .building-piece-fortress {
@@ -3982,7 +3984,15 @@ textarea {
     brightness(1.14)
     drop-shadow(0 0 1.25px rgba(255, 247, 219, 0.42))
     drop-shadow(0 2px 3px rgba(20, 16, 10, 0.52))
-    drop-shadow(0 0 9px color-mix(in srgb, var(--piece-color, #f2c14e) 48%, transparent))
+    drop-shadow(0 0 9px rgba(242, 193, 78, 0.48))
+    drop-shadow(0 0 3px rgba(226, 199, 136, 0.2));
+  filter:
+    saturate(1.82)
+    contrast(1.2)
+    brightness(1.14)
+    drop-shadow(0 0 1.25px rgba(255, 247, 219, 0.42))
+    drop-shadow(0 2px 3px rgba(20, 16, 10, 0.52))
+    drop-shadow(0 0 9px var(--piece-glow-fortress, rgba(242, 193, 78, 0.48)))
     drop-shadow(0 0 3px rgba(226, 199, 136, 0.2));
 }
 
@@ -3992,16 +4002,7 @@ textarea {
   transform: scale(1.045);
   transform-box: fill-box;
   transform-origin: center;
-  filter:
-    saturate(1.32)
-    brightness(1.08)
-    drop-shadow(1.35px 0 0 rgba(255, 255, 255, 0.94))
-    drop-shadow(-1.35px 0 0 rgba(255, 255, 255, 0.94))
-    drop-shadow(0 1.35px 0 rgba(255, 255, 255, 0.94))
-    drop-shadow(0 -1.35px 0 rgba(255, 255, 255, 0.94))
-    drop-shadow(0 1px 2px rgba(20, 16, 10, 0.46))
-    drop-shadow(0 0 8px rgba(255, 255, 255, 0.46))
-    drop-shadow(0 0 10px color-mix(in srgb, var(--piece-color, #f2c14e) 38%, transparent));
+  filter: url("#selection-white-outline");
   animation: selection-white-edge-blink 1.25s ease-in-out infinite;
 }
 
@@ -4011,17 +4012,7 @@ textarea {
 
 .building-piece-preview {
   opacity: 0.68;
-  filter:
-    saturate(1.55)
-    contrast(1.13)
-    brightness(1.1)
-    drop-shadow(1.35px 0 0 rgba(255, 255, 255, 0.94))
-    drop-shadow(-1.35px 0 0 rgba(255, 255, 255, 0.94))
-    drop-shadow(0 1.35px 0 rgba(255, 255, 255, 0.94))
-    drop-shadow(0 -1.35px 0 rgba(255, 255, 255, 0.94))
-    drop-shadow(0 1px 2px rgba(20, 16, 10, 0.46))
-    drop-shadow(0 0 8px rgba(255, 255, 255, 0.46))
-    drop-shadow(0 0 10px color-mix(in srgb, var(--piece-color, #f2c14e) 42%, transparent));
+  filter: url("#selection-white-preview");
   animation: selection-white-edge-blink 1.25s ease-in-out infinite;
 }
 
@@ -4042,17 +4033,6 @@ textarea {
   }
   50% {
     opacity: 1;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .building-piece-legal-outline,
-  .building-piece.legal-building-target,
-  .building-piece-preview,
-  .route-piece-preview,
-  .tile-art-selection-outline,
-  .tile.legal-tile-target {
-    animation: none;
   }
 }
 
@@ -4131,7 +4111,10 @@ textarea {
   stroke-width: 2.5;
   filter:
     drop-shadow(0 0 1px rgba(255, 250, 226, 0.58))
-    drop-shadow(0 0 5px color-mix(in srgb, var(--piece-color, #f2c14e) 42%, transparent));
+    drop-shadow(0 0 5px rgba(242, 193, 78, 0.42));
+  filter:
+    drop-shadow(0 0 1px rgba(255, 250, 226, 0.58))
+    drop-shadow(0 0 5px var(--piece-glow-marker, rgba(242, 193, 78, 0.42)));
 }
 
 .militia-marker text {
@@ -4490,6 +4473,70 @@ textarea {
 .resource-picker {
   display: grid;
   gap: 10px;
+}
+
+.right-operation-dock .resource-buttons {
+  justify-content: center;
+}
+
+.right-operation-dock .resource-buttons > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 5px;
+}
+
+.resource-choice-asset-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.resource-choice-asset-icon img {
+  transform: scale(0.92);
+}
+
+.resource-choice-asset-icon-fuel img {
+  transform: translateY(-2px) scale(0.76);
+}
+
+.resource-choice-asset-icon-ammo img {
+  transform: translateY(-5px) scale(0.68);
+}
+
+.bank-resource-choices,
+.bank-resource-choice {
+  display: grid;
+  gap: 6px;
+}
+
+.trade-mode-selector {
+  grid-template-columns: 1fr 1fr;
+  width: 100%;
+}
+
+.bank-resource-choice > strong {
+  text-align: center;
+  font-size: 12px;
+}
+
+.compact-resource-buttons {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  width: 100%;
+}
+
+.compact-resource-buttons > button {
+  min-width: 0;
+  padding-inline: 4px;
+  flex-direction: column;
+  line-height: 1.05;
+}
+
+.compact-resource-buttons > button.selected {
+  border-color: rgba(184, 205, 119, 0.72);
+  background: rgba(121, 151, 69, 0.48);
+  color: #fff8df;
 }
 
 .muted-line {
@@ -5307,6 +5354,7 @@ textarea {
   overflow: visible;
   isolation: isolate;
   padding: 0;
+  touch-action: none;
 }
 
 .dev-hand-card {
@@ -5317,7 +5365,7 @@ textarea {
   cursor: grab;
   transform: translateX(calc(-50% + var(--fan-x))) translateY(var(--fan-y)) rotate(var(--fan-rotation));
   transform-origin: 50% 92%;
-  touch-action: pan-x;
+  touch-action: none;
   transition: transform 160ms ease, filter 160ms ease, opacity 160ms ease;
   will-change: transform;
 }
@@ -5606,6 +5654,7 @@ textarea {
     linear-gradient(180deg, rgba(57, 38, 31, 0.84), rgba(24, 21, 18, 0.76)),
     rgba(20, 18, 15, 0.72);
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
+  -webkit-backdrop-filter: blur(5px);
   backdrop-filter: blur(5px);
 }
 
@@ -6066,10 +6115,7 @@ textarea {
   min-height: 0;
   display: block;
   overflow: visible;
-  filter:
-    drop-shadow(0 0 14px rgba(248, 250, 232, 0.55))
-    drop-shadow(0 0 34px rgba(158, 198, 202, 0.34))
-    drop-shadow(0 28px 34px rgba(0, 0, 0, 0.46));
+  filter: none;
 }
 
 .top-player-hud,
@@ -6124,6 +6170,7 @@ textarea {
   border: 0;
   background: transparent;
   box-shadow: none;
+  -webkit-backdrop-filter: none;
   backdrop-filter: none;
   transform: none;
 }
@@ -6187,6 +6234,7 @@ textarea {
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+  -webkit-backdrop-filter: none;
   backdrop-filter: none;
   transform: none;
 }
@@ -6225,6 +6273,7 @@ textarea {
   border-radius: 8px;
   background: linear-gradient(180deg, rgba(17, 18, 15, 0.92), rgba(17, 18, 15, 0.78));
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.34);
+  -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
 }
 
@@ -6387,6 +6436,7 @@ textarea {
   border: 0;
   background: transparent;
   box-shadow: none;
+  -webkit-backdrop-filter: none;
   backdrop-filter: none;
   display: block;
   height: auto;
@@ -6761,6 +6811,7 @@ textarea {
   background:
     linear-gradient(145deg, rgba(5, 6, 5, 0.74), rgba(18, 16, 13, 0.58)),
     repeating-linear-gradient(135deg, rgba(236, 219, 172, 0.05) 0 1px, transparent 1px 18px);
+  -webkit-backdrop-filter: blur(5px) saturate(0.86);
   backdrop-filter: blur(5px) saturate(0.86);
   transform: translate(-50%, -50%) scale(var(--fixed-stage-scale, 1));
   transform-origin: center;
@@ -6873,6 +6924,7 @@ textarea {
     radial-gradient(circle at 50% 12%, rgba(179, 112, 48, 0.16), transparent 38%),
     linear-gradient(145deg, rgba(5, 6, 5, 0.82), rgba(18, 16, 13, 0.68)),
     repeating-linear-gradient(135deg, rgba(236, 219, 172, 0.045) 0 1px, transparent 1px 18px);
+  -webkit-backdrop-filter: blur(7px) saturate(0.8);
   backdrop-filter: blur(7px) saturate(0.8);
   transform: translate(-50%, -50%) scale(var(--fixed-stage-scale, 1));
   transform-origin: center;
@@ -7790,6 +7842,7 @@ textarea {
   place-items: center;
   padding: 24px;
   background: rgba(4, 5, 4, 0.62);
+  -webkit-backdrop-filter: blur(5px);
   backdrop-filter: blur(5px);
 }
 
@@ -8000,6 +8053,7 @@ textarea {
     0 0 0 1px rgba(255, 235, 181, 0.08),
     0 26px 70px rgba(0, 0, 0, 0.64),
     inset 0 0 0 1px rgba(255, 234, 177, 0.07);
+  -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
 }
 
@@ -8412,6 +8466,7 @@ textarea {
     0 0 0 1px rgba(255, 235, 181, 0.08),
     0 26px 70px rgba(0, 0, 0, 0.64),
     inset 0 0 0 1px rgba(255, 234, 177, 0.07);
+  -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
 }
 
@@ -8804,6 +8859,7 @@ textarea {
   background:
     linear-gradient(145deg, rgba(5, 6, 5, 0.68), rgba(18, 16, 13, 0.5)),
     repeating-linear-gradient(135deg, rgba(236, 219, 172, 0.05) 0 1px, transparent 1px 18px);
+  -webkit-backdrop-filter: blur(4px) saturate(0.88);
   backdrop-filter: blur(4px) saturate(0.88);
   transform: translate(-50%, -50%) scale(var(--fixed-stage-scale, 1));
   transform-origin: center;
@@ -8958,6 +9014,7 @@ textarea {
     radial-gradient(circle at 50% 34%, rgba(236, 219, 172, 0.16), transparent 28rem),
     linear-gradient(145deg, rgba(4, 5, 5, 0.78), rgba(18, 16, 13, 0.62)),
     repeating-linear-gradient(135deg, rgba(236, 219, 172, 0.05) 0 1px, transparent 1px 18px);
+  -webkit-backdrop-filter: blur(5px) saturate(0.82);
   backdrop-filter: blur(5px) saturate(0.82);
 }
 
@@ -9439,6 +9496,24 @@ textarea {
   }
 }
 
+.game-shell button:active:not(:disabled) {
+  background: rgba(236, 219, 172, 0.2);
+  border-color: rgba(229, 202, 139, 0.48);
+}
+
+.game-shell .vp-chip:active:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--player-color) 58%, #ffe8a6);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--player-color) 86%, rgba(52, 37, 22, 0.96)), color-mix(in srgb, var(--player-color) 42%, rgba(18, 16, 12, 0.98)));
+}
+
+.game-shell .illustrated-turn-button:active:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(229, 218, 160, 0.56);
+  filter: saturate(1.05) brightness(1.06);
+}
+
 .turn-button-art-frame,
 .turn-button-copy {
   position: relative;
@@ -9806,12 +9881,8 @@ textarea {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  .dev-card-burst {
     animation-duration: 1ms !important;
     animation-iteration-count: 1 !important;
-    scroll-behavior: auto !important;
-    transition-duration: 1ms !important;
   }
 }

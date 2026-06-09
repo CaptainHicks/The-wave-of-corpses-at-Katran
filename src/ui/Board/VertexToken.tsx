@@ -1,6 +1,7 @@
 import type { CSSProperties, MouseEvent } from "react";
 import type { BuildingType, Militia, PlayerState, VertexState } from "../../domain/types";
 import { boardMarkerAssets, getBuildingPieceAsset } from "../art/assetManifest";
+import { buildingPieceColorStyle } from "./pieceColorStyles";
 
 const BUILDING_PIECE_BOX = {
   camp: {
@@ -69,10 +70,10 @@ export function VertexToken({
   const hasExpandedHitArea = Boolean(expandedHitArea && !vertex.building && !hasPreviewBuilding);
   const hasLegalBuildingTarget = Boolean(vertex.building && buildingAsset && pieceBox && legal);
   const buildingPieceStyle = buildingOwner
-    ? ({ "--piece-color": buildingOwner.color } as CSSProperties)
+    ? buildingPieceColorStyle(buildingOwner.color)
     : undefined;
   const previewBuildingPieceStyle = previewBuildingOwner
-    ? ({ "--piece-color": previewBuildingOwner.color } as CSSProperties)
+    ? buildingPieceColorStyle(previewBuildingOwner.color)
     : undefined;
   const targetHitRadius = coarsePointer ? 20 : 18;
   const touchCueRadius = 13;
@@ -114,6 +115,7 @@ export function VertexToken({
           preserveAspectRatio="xMidYMid meet"
           className={`building-piece building-piece-${previewBuildingType} building-piece-preview`}
           style={previewBuildingPieceStyle}
+          filter="url(#selection-white-preview)"
           aria-hidden="true"
         />
       )}
@@ -129,6 +131,7 @@ export function VertexToken({
               preserveAspectRatio="xMidYMid meet"
               className="building-piece-legal-outline"
               style={buildingPieceStyle}
+              filter="url(#selection-white-outline)"
               aria-hidden="true"
             />
           )}
@@ -187,7 +190,9 @@ export function VertexToken({
         })}
       {(!buildingAsset ? militia : militia.filter((item) => item.ownerId !== buildingOwner?.id)).map((item, index) => {
         const owner = players.find((player) => player.id === item.ownerId);
-        const militiaStyle = owner ? ({ "--piece-color": owner.color, color: owner.color } as CSSProperties) : undefined;
+        const militiaStyle = owner
+          ? buildingPieceColorStyle(owner.color, { color: owner.color } as CSSProperties)
+          : undefined;
         const offsets = [
           { x: -13, y: 13 },
           { x: 13, y: 13 }

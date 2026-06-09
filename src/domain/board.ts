@@ -127,6 +127,58 @@ const BOARD_STRUCTURES: readonly BoardStructure[] = [
       "OOSSSOOSSO",
       "OOOSSOOSS"
     ]
+  },
+  {
+    id: "northern-ridge",
+    reveal: "large-buffer",
+    rows: [
+      "OLLLLLLLO",
+      "OLLLLLLLLO",
+      "OOLLLLLLLOO",
+      "OOOLLLLLLOOO",
+      "SSOOLLLOOSS",
+      "SSSOOOOSSS",
+      "SSSOOOSSS"
+    ]
+  },
+  {
+    id: "southern-breach",
+    reveal: "large-buffer",
+    rows: [
+      "SSSSOOSSS",
+      "SSSOOOOOSS",
+      "SSOOLLLLOOS",
+      "OOOLLLLLLLOO",
+      "SSOOLLLLOOS",
+      "SSSOOOOOSS",
+      "SSSSOOSSS"
+    ]
+  },
+  {
+    id: "central-fracture",
+    reveal: "large-buffer",
+    rows: [
+      "SSOOOOSSS",
+      "SSOOLLOOSS",
+      "SOOLLLLLOOS",
+      "OOOLLLLLLOOO",
+      "SOOLLLLLOOS",
+      "SSOOLLOOSS",
+      "SSOOOOSSS"
+    ]
+  },
+  {
+    id: "wasteland-ring",
+    reveal: "large-buffer",
+    rows: [
+      "SSSSOLLLL",
+      "SSSOOLLLLL",
+      "SSOOLLLLLOO",
+      "OOOLLLLLLOOO",
+      "SSOOLLLLLOO",
+      "SSSOOLLLLL",
+      "SSSSOLLLL"
+    ]
   }
 ] as const;
 
