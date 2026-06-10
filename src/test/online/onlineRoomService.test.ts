@@ -66,17 +66,21 @@ describe("OnlineRoomService", () => {
       roomCode: host.room.roomCode,
       viewerPlayerId: host.seat.playerId
     });
-    room = await service.applyPlayerCommand({
-      roomCode: room.roomCode,
-      viewerPlayerId: host.seat.playerId,
-      command: { type: "placeInitialCamp", vertexId: legalInitialCampVertices(room.gameState!)[0] }
-    });
-    room = await service.applyPlayerCommand({
-      roomCode: room.roomCode,
-      viewerPlayerId: host.seat.playerId,
-      command: { type: "placeInitialRoute", edgeId: legalInitialRouteEdges(room.gameState!)[0] }
-    });
 
+    for (let step = 0; room.gameState?.phase === "setup" && step < 10; step += 1) {
+      expect(room.gameState.pending?.playerId ?? room.gameState.currentPlayerId).toBe(host.seat.playerId);
+      const command =
+        room.gameState.pending?.kind === "setupRoute"
+          ? { type: "placeInitialRoute" as const, edgeId: legalInitialRouteEdges(room.gameState)[0] }
+          : { type: "placeInitialCamp" as const, vertexId: legalInitialCampVertices(room.gameState)[0] };
+      room = await service.applyPlayerCommand({
+        roomCode: room.roomCode,
+        viewerPlayerId: host.seat.playerId,
+        command
+      });
+    }
+
+    expect(room.gameState?.phase).not.toBe("setup");
     expect(room.gameState?.currentPlayerId).toBe(host.seat.playerId);
     expect(Object.values(room.gameState!.board.vertices).filter((vertex) => vertex.building?.ownerId === "p2")).toHaveLength(2);
     expect(Object.values(room.gameState!.board.edges).filter((edge) => edge.route?.ownerId === "p2")).toHaveLength(2);
