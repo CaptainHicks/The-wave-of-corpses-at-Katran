@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  Bot,
   BookOpen,
   Bug,
   CloudFog,
@@ -68,6 +69,7 @@ interface StartScreenProps {
 
 const EMPTY_LOCAL_NAMES = PLAYER_FACTIONS.map(() => "");
 const EMPTY_LOCAL_FACTION_IDS = PLAYER_FACTIONS.map(() => "");
+const DEFAULT_LOCAL_CONTROLLERS = PLAYER_FACTIONS.map((_, index) => (index === 0 ? "human" : "ai") as "human" | "ai");
 const ROOM_CODE_LENGTH = 6;
 const START_STAGE_WIDTH = 1672;
 const START_STAGE_HEIGHT = 941;
@@ -151,11 +153,13 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
   const [count, setCount] = useState(4);
   const [names, setNames] = useState<string[]>(EMPTY_LOCAL_NAMES);
   const [localFactionIds, setLocalFactionIds] = useState<string[]>(EMPTY_LOCAL_FACTION_IDS);
+  const [localControllers, setLocalControllers] = useState<Array<"human" | "ai">>(DEFAULT_LOCAL_CONTROLLERS);
   const [fogEnabled, setFogEnabled] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
   const [onlineHostName, setOnlineHostName] = useState<string>("");
   const [onlineJoinName, setOnlineJoinName] = useState<string>("");
   const [onlineTargetCount, setOnlineTargetCount] = useState(2);
+  const [onlineAiCount, setOnlineAiCount] = useState(0);
   const [onlineFogEnabled, setOnlineFogEnabled] = useState(false);
   const [joinRoomCode, setJoinRoomCode] = useState("");
   const [lobbyChatDraft, setLobbyChatDraft] = useState("");
@@ -172,7 +176,8 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
   const normalizedOnlineJoinName = onlineJoinName.trim();
   const normalizedLobbyChatDraft = lobbyChatDraft.trim();
   const selectedLocalFactionIds = localFactionIds.slice(0, count);
-  const canCreateLocalGame = selectedLocalFactionIds.every(Boolean);
+  const canCreateLocalGame =
+    selectedLocalFactionIds.every(Boolean) && localControllers.slice(0, count).some((controller) => controller === "human");
 
   useLayoutEffect(() => {
     const handleResize = () => {
@@ -220,7 +225,8 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
         return {
           name: playerName.trim() || faction.name,
           color: faction.color,
-          factionId: faction.id
+          factionId: faction.id,
+          controller: localControllers[index] ?? "ai"
         };
       }),
       seed: gameSeed(),
@@ -382,9 +388,9 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
           <img className="start-mode-card-art" src="/assets/menu/mode-local-hotseat.png" alt="" />
           <span className="start-mode-card-shade" aria-hidden="true" />
           <Users size={46} />
-          <strong>本地热座</strong>
+          <strong>本地对局</strong>
           <small>
-            在同一设备上与身边的伙伴
+            与 AI 或身边的伙伴
             <br />
             一起游戏
           </small>
@@ -414,8 +420,8 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
       <header className="start-local-title start-secondary-title">
           <span aria-hidden="true" />
           <div>
-            <h2>本地热座</h2>
-            <p>围桌协作，轮流指挥幸存者阵营</p>
+            <h2>本地对局</h2>
+            <p>配置真人与 AI 席位，集结幸存者阵营</p>
           </div>
           <span aria-hidden="true" />
       </header>
@@ -471,7 +477,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
         </section>
 
         <section className="start-local-faction-section">
-          <h3>3. 选择阵营 <small>（每个席位选择一个阵营，可保留默认名或重新命名）</small></h3>
+          <h3>3. 配置席位 <small>（选择真人或 AI、阵营与名称）</small></h3>
           <div className="player-setup-list start-player-setup-list" style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }}>
             {Array.from({ length: count }, (_, index) => {
               const factionId = localFactionIds[index] ?? "";
@@ -486,7 +492,27 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
                     {selectedFaction ? <img src={selectedFaction.portrait} alt="" /> : <Users size={44} />}
                   </div>
                   <strong>{selectedFaction?.name ?? `玩家 ${index + 1}`}</strong>
-                  <p>{selectedFaction ? FACTION_FLAVOR[selectedFaction.id] : "请选择该席位的阵营，之后可保留默认名称或重新命名。"}</p>
+                  <p>
+                    {localControllers[index] === "ai" ? "AI 将自动完成自己的回合。" : selectedFaction ? FACTION_FLAVOR[selectedFaction.id] : "请选择该席位的阵营。"}
+                  </p>
+                  <label className="field compact-field start-controller-select-field">
+                    <span className="sr-only">玩家 {index + 1} 控制方式</span>
+                    <div className="faction-select-row">
+                      {localControllers[index] === "ai" ? <Bot size={18} aria-hidden="true" /> : <User size={18} aria-hidden="true" />}
+                      <select
+                        aria-label={`玩家 ${index + 1} 控制方式`}
+                        value={localControllers[index]}
+                        onChange={(event) => {
+                          const next = [...localControllers];
+                          next[index] = event.target.value as "human" | "ai";
+                          setLocalControllers(next);
+                        }}
+                      >
+                        <option value="human">真人玩家</option>
+                        <option value="ai">AI 玩家</option>
+                      </select>
+                    </div>
+                  </label>
                   <label className="field compact-field start-faction-select-field">
                     <span className="sr-only">玩家 {index + 1} 阵营</span>
                     <div className="faction-select-row">
@@ -530,7 +556,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
           className="start-confirm-button start-local-start-button"
         aria-label="确认开局"
         disabled={!canCreateLocalGame}
-        title={canCreateLocalGame ? "开始本地热座" : "请先为每个席位选择阵营"}
+        title={canCreateLocalGame ? "开始本地对局" : "请为每个席位选择阵营，并保留至少一名真人玩家"}
         onClick={createGame}
       >
         <Play size={20} />
@@ -998,7 +1024,10 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
                       type="button"
                       className={onlineTargetCount === value ? "active" : ""}
                       aria-pressed={onlineTargetCount === value}
-                      onClick={() => setOnlineTargetCount(value)}
+                      onClick={() => {
+                        setOnlineTargetCount(value);
+                        setOnlineAiCount((current) => Math.min(current, value - 1));
+                      }}
                     >
                       <User size={17} />
                       <span>{value} 人</span>
@@ -1009,6 +1038,18 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
 
               <div className="start-online-field start-online-options">
                 <span>3. 游戏选项</span>
+                <label className="start-online-ai-count">
+                  <Bot size={20} aria-hidden="true" />
+                  <span>
+                    <strong>AI 玩家</strong>
+                    <small>AI 将在服务器后台自动行动</small>
+                  </span>
+                  <select aria-label="在线 AI 玩家数量" value={onlineAiCount} onChange={(event) => setOnlineAiCount(Number(event.target.value))}>
+                    {Array.from({ length: onlineTargetCount }, (_, value) => (
+                      <option key={value} value={value}>{value} 名</option>
+                    ))}
+                  </select>
+                </label>
                 <label className={onlineFogEnabled ? "start-option-toggle start-fog-toggle active" : "start-option-toggle start-fog-toggle"}>
                   <input type="checkbox" checked={onlineFogEnabled} onChange={(event) => setOnlineFogEnabled(event.target.checked)} />
                   <CloudFog size={20} />
@@ -1038,6 +1079,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
                   online?.onCreateRoom({
                     name: normalizedOnlineHostName,
                     targetPlayerCount: onlineTargetCount,
+                    aiPlayerCount: onlineAiCount,
                     fogEnabled: onlineFogEnabled
                   })
                 }
@@ -1165,7 +1207,11 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
                 <select
                   aria-label="在线房间人数"
                   value={onlineTargetCount}
-                  onChange={(event) => setOnlineTargetCount(Number(event.target.value))}
+                  onChange={(event) => {
+                    const value = Number(event.target.value);
+                    setOnlineTargetCount(value);
+                    setOnlineAiCount((current) => Math.min(current, value - 1));
+                  }}
                 >
                   {[2, 3, 4, 5, 6].map((value) => (
                     <option key={value} value={value}>
@@ -1181,6 +1227,18 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
                   <strong>迷雾开局</strong>
                   <small>{onlineFogEnabled ? "未知地块需要逐步侦察" : "全部地块开局可见"}</small>
                 </span>
+              </label>
+              <label className="start-online-ai-count">
+                <Bot size={20} aria-hidden="true" />
+                <span>
+                  <strong>AI 玩家</strong>
+                  <small>由服务器后台托管</small>
+                </span>
+                <select aria-label="在线创建 AI 玩家数量" value={onlineAiCount} onChange={(event) => setOnlineAiCount(Number(event.target.value))}>
+                  {Array.from({ length: onlineTargetCount }, (_, value) => (
+                    <option key={value} value={value}>{value} 名</option>
+                  ))}
+                </select>
               </label>
             </div>
 
@@ -1205,6 +1263,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
                   online?.onCreateRoom({
                     name: normalizedOnlineHostName,
                     targetPlayerCount: onlineTargetCount,
+                    aiPlayerCount: onlineAiCount,
                     fogEnabled: onlineFogEnabled
                   })
                 }
@@ -1414,12 +1473,13 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
                     style={{ "--player-color": seat.color } as CSSProperties}
                   >
                     <span className="start-lobby-player-avatar">
-                      {faction ? <img src={faction.portrait} alt="" aria-hidden="true" /> : <User size={21} aria-hidden="true" />}
+                      {faction ? <img src={faction.portrait} alt="" aria-hidden="true" /> : seat.controller === "ai" ? <Bot size={21} aria-hidden="true" /> : <User size={21} aria-hidden="true" />}
                     </span>
                     <div>
                       <strong>
                         {seat.name}
                         {isSeatHost ? "（房主）" : ""}
+                        {seat.controller === "ai" ? "（AI）" : ""}
                       </strong>
                       <small>{faction?.name ?? "未选择阵营"}</small>
                     </div>

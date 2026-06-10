@@ -49,7 +49,8 @@ export function PersistencePanel({
       players: state.players.map((player) => ({
         name: player.name,
         color: player.color,
-        factionId: player.factionId
+        factionId: player.factionId,
+        controller: player.controller
       })),
       seed: `wasteland-${Date.now()}`,
       fogEnabled,
@@ -171,7 +172,7 @@ export function PersistencePanel({
           />
           <SystemMenuAction
             icon={Skull}
-            title="推进尸潮进度"
+            title="推进尸潮围城进度"
             description="推进尸潮阶段"
             variant="debug"
             disabled={!debugEnabled}

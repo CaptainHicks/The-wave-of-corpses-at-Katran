@@ -362,6 +362,8 @@ export function localizeOnlineError(message: string): string {
     "Chat message is required.": "请输入聊天内容。",
     "Room not found.": "没有找到这个房间。",
     "Online rooms support 2 to 6 players.": "在线房间支持 2 到 6 名玩家。",
+    "Online rooms must keep at least one human player seat.": "在线房间至少需要保留 1 名人类玩家席位。",
+    "AI player factions are managed by the system.": "AI 玩家阵营由系统管理。",
     "This player cannot issue that command in online mode.": "这名玩家不能在联机模式中执行这个操作。",
     "Debug and local-only commands are disabled in online mode.": "调试和本地专用操作不能在联机模式中使用。",
     "Forced dice rolls are disabled in online mode.": "联机模式不能指定骰子点数。",

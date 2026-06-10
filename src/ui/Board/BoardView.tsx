@@ -36,6 +36,7 @@ import { BlackMarketMarker } from "./BlackMarketMarker";
 import { BoardAnimationLayer } from "./BoardAnimationLayer";
 import { EdgeRoute } from "./EdgeRoute";
 import { HexTile } from "./HexTile";
+import { PieceVividFilters } from "./PieceVividFilters";
 import { VertexToken } from "./VertexToken";
 import { useCoarsePointer } from "../useCoarsePointer";
 
@@ -587,6 +588,7 @@ export function BoardView({
       }}
     >
       <defs>
+        <PieceVividFilters players={state.players} />
         <pattern id="fog" width="10" height="10" patternUnits="userSpaceOnUse">
           <rect width="10" height="10" fill="#60666a" />
           <path d="M0 10L10 0" stroke="#7c858a" strokeWidth="1" />

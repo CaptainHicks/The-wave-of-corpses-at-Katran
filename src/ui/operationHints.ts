@@ -157,7 +157,7 @@ function getOperationContextHint(context: UiOperationContext) {
       requisition: "下一步选择一种要征用的资源。",
       merchant: "下一步在地图选择要移动到的资源地块。",
       secretBase: "会立即结算胜利点。",
-      zombieApproaches: "会立即推进尸潮进度。"
+      zombieApproaches: "会立即推进尸潮围城进度。"
     };
     return `${cardName}可打出。${cardHints[context.cardType]}`;
   }

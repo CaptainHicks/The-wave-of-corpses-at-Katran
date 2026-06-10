@@ -349,7 +349,7 @@ async function emitRoomViews(room: StoredOnlineRoom) {
       fogEnabled: room.fogEnabled
     } as const;
 
-    for (const seat of room.seats) {
+    for (const seat of room.seats.filter((seat) => seat.controller !== "ai")) {
       emitToPlayer(
         room.roomCode,
         seat.playerId,
@@ -368,7 +368,12 @@ async function emitRoomViews(room: StoredOnlineRoom) {
     connectedPlayerIds
   } as const;
 
-  const views = buildOnlineGameViews(roomMeta, room.gameState, room.seats.map((seat) => seat.playerId), room.lastCommand);
+  const views = buildOnlineGameViews(
+    roomMeta,
+    room.gameState,
+    room.seats.filter((seat) => seat.controller !== "ai").map((seat) => seat.playerId),
+    room.lastCommand
+  );
   for (const view of views) {
     emitToPlayer(room.roomCode, view.viewerPlayerId, "room:view", view);
   }

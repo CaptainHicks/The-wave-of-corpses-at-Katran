@@ -16,6 +16,7 @@ export interface LobbyRoomMetaSnapshot extends RoomMetaSnapshot {
 export interface RoomCreateRequest {
   name: string;
   targetPlayerCount: number;
+  aiPlayerCount?: number;
   fogEnabled: boolean;
 }
 
@@ -77,6 +78,7 @@ export interface PublicOnlinePlayerState
     | "name"
     | "color"
     | "factionId"
+    | "controller"
     | "militia"
     | "defenderTokens"
     | "movedConvoyThisTurn"
@@ -146,6 +148,7 @@ export interface LobbySeatView {
   name: string;
   color: string;
   factionId?: string;
+  controller?: PlayerState["controller"];
   connected: boolean;
 }
 
@@ -246,6 +249,7 @@ export function buildLobbyView(
     name: string;
     color: string;
     factionId?: string;
+    controller?: PlayerState["controller"];
     connected: boolean;
   }>,
   viewerPlayerId: string,
@@ -279,6 +283,7 @@ function buildLobbySeatViews(
     name: string;
     color: string;
     factionId?: string;
+    controller?: PlayerState["controller"];
     connected: boolean;
   }>
 ): LobbySeatView[] {
@@ -287,6 +292,7 @@ function buildLobbySeatViews(
     name: seat.name,
     color: seat.color,
     factionId: seat.factionId,
+    controller: seat.controller ?? "human",
     connected: seat.connected
   }));
 }
@@ -308,6 +314,7 @@ function buildPublicPlayer(
     name: player.name,
     color: player.color,
     factionId: player.factionId,
+    controller: player.controller ?? "human",
     militia: player.militia,
     defenderTokens: player.defenderTokens,
     movedConvoyThisTurn: player.movedConvoyThisTurn,

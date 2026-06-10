@@ -19,6 +19,7 @@ function createActionState(): GameState {
     seed: "online-auth"
   });
   state = applyCommand(state, { type: "debugJumpPhase", phase: "action" });
+  state.currentPlayerId = "p1";
   state = applyCommand(state, {
     type: "debugSetResources",
     playerId: "p1",
@@ -118,6 +119,7 @@ describe("authorizeCommandForPlayer", () => {
       seed: "online-forced-dice"
     });
     state = applyCommand(state, { type: "debugJumpPhase", phase: "dice" });
+    state.currentPlayerId = "p1";
 
     expectAuthorized(state, "p1", { type: "rollDice" });
     expectRejected(state, "p1", { type: "rollDice", forced: [6, 6] });

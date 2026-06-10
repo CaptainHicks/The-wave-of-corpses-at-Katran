@@ -170,7 +170,6 @@ export function DevCard({
           swallowedClick.current = true;
           pointerStartY.current = undefined;
           event.preventDefault();
-          event.stopPropagation();
           return;
         }
         finishGesture(event.clientY, () => event.preventDefault(), () => event.stopPropagation());

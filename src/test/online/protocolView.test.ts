@@ -19,6 +19,7 @@ function createPendingTradeState(): GameState {
     seed: "online-view"
   });
   state = applyCommand(state, { type: "debugJumpPhase", phase: "action" });
+  state.currentPlayerId = "p1";
   state = applyCommand(state, {
     type: "debugSetResources",
     playerId: "p1",

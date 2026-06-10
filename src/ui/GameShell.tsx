@@ -12,6 +12,7 @@ import {
   type WheelEvent
 } from "react";
 import type { Command, GameState } from "../domain/types";
+import { isAiPlayer } from "../domain/ai";
 import type { GameAnimationEvent } from "./animation/animationTypes";
 import { ZombieSiegeAlert } from "./animation/ZombieSiegeAlert";
 import { BoardView } from "./Board/BoardView";
@@ -34,6 +35,7 @@ interface GameShellProps {
   viewerPlayerId: string;
   pendingPlayerId?: string;
   interactionMode: InteractionMode;
+  turnReminderEnabled?: boolean;
   onlineRoomCode?: string;
   onlineConnectionState?: "disconnected" | "connecting" | "connected" | "reconnecting";
   onlineCommandBusy?: boolean;
@@ -166,6 +168,7 @@ export function GameShell({
   viewerPlayerId,
   pendingPlayerId,
   interactionMode,
+  turnReminderEnabled,
   onlineRoomCode,
   onlineConnectionState,
   onlineCommandBusy = false,
@@ -187,7 +190,11 @@ export function GameShell({
   const mode = getTurnUiMode(state);
   const effectivePendingPlayerId = pendingPlayerId ?? state.pending?.playerId;
   const activeTimerPlayerId = effectivePendingPlayerId ?? state.currentPlayerId;
-  const canInteract = interactionMode === "hot-seat" || viewerPlayerId === (effectivePendingPlayerId ?? state.currentPlayerId);
+  const activeDecisionPlayer = state.players.find((player) => player.id === activeTimerPlayerId);
+  const shouldShowTurnReminder = turnReminderEnabled ?? interactionMode === "online";
+  const canInteract =
+    !isAiPlayer(activeDecisionPlayer) &&
+    (interactionMode === "hot-seat" || viewerPlayerId === (effectivePendingPlayerId ?? state.currentPlayerId));
   const turnTimerScope = state.pending ? `pending:${state.pending.kind}` : "turn";
   const turnTimerKey = [
     state.turn,
@@ -201,7 +208,7 @@ export function GameShell({
   const onlineTurnReminderPlayer = state.players.find((player) => player.id === activeTimerPlayerId);
   const onlineTurnReminderPlayerName = onlineTurnReminderPlayer?.name;
   const onlineTurnReminderKey =
-    interactionMode === "online" && mode !== "victory" && activeTimerPlayerId === viewerPlayerId && onlineTurnReminderPlayer
+    shouldShowTurnReminder && mode !== "victory" && activeTimerPlayerId === viewerPlayerId && onlineTurnReminderPlayer
       ? buildOnlineTurnReminderKey(state, activeTimerPlayerId, onlineRoomCode)
       : undefined;
   const shownOnlineTurnReminderKeysRef = useRef<Set<string>>(new Set());

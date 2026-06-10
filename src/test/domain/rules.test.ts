@@ -27,7 +27,7 @@ import {
 } from "../../domain/rules";
 import { randomInt } from "../../domain/rng";
 import type { BoardState, EdgeState, GameState, Resources, TileType } from "../../domain/types";
-import { DEV_CARD_COUNTS, PIECE_LIMITS, VICTORY_POINTS_TO_WIN, createResources } from "../../domain/constants";
+import { DEV_CARD_COUNTS, PIECE_LIMITS, TILE_LABELS, VICTORY_POINTS_TO_WIN, createResources } from "../../domain/constants";
 
 const NORMAL_RESOURCE_TYPES: TileType[] = ["factory", "farm", "military", "forest", "city"];
 const NORMAL_RESOURCE_TARGET_WEIGHTS: Record<TileType, number> = {
@@ -644,10 +644,42 @@ describe("setup and production", () => {
     expect(debug.players[0].factionId).toBe("red-rust");
   });
 
-  it("runs snake initial placement and starts player one prepare phase", () => {
+  it("rolls two dice per player and starts setup with the unique highest roller", () => {
+    const state = createSeededGame("starting-player-roll");
+    const rollMessages = [...state.log]
+      .reverse()
+      .map((entry) => entry.message)
+      .filter((message) => message.includes("开局掷出"));
+    const finalRollByPlayer = new Map<string, number>();
+
+    rollMessages.forEach((message) => {
+      const match = /^(.*?) 开局掷出 \d \+ \d = (\d+)。$/.exec(message);
+      expect(match).toBeTruthy();
+      finalRollByPlayer.set(match![1], Number(match![2]));
+    });
+
+    const starter = state.players.find((player) => player.id === state.currentPlayerId)!;
+    expect(rollMessages.length).toBeGreaterThanOrEqual(state.players.length);
+    expect(state.setup.order[0]).toBe(starter.id);
+    expect(finalRollByPlayer.get(starter.name)).toBe(Math.max(...finalRollByPlayer.values()));
+    expect(state.log[0].message).toContain(`${starter.name} 点数最高`);
+  });
+
+  it("rerolls only the players tied for the highest opening roll", () => {
+    const state = createSeededGame("tie-0");
+    const messages = [...state.log].reverse().map((entry) => entry.message);
+
+    expect(messages).toContain("A、B 最高点并列，继续重掷。");
+    expect(messages.filter((message) => message.startsWith("A 开局掷出"))).toHaveLength(2);
+    expect(messages.filter((message) => message.startsWith("B 开局掷出"))).toHaveLength(2);
+    expect(messages.filter((message) => message.startsWith("C 开局掷出"))).toHaveLength(1);
+    expect(state.currentPlayerId).toBe("p2");
+  });
+
+  it("runs snake initial placement and starts the highest roller prepare phase", () => {
     const state = setupGame();
     expect(state.phase).toBe("prepare");
-    expect(state.currentPlayerId).toBe("p1");
+    expect(state.currentPlayerId).toBe(state.setup.order[0]);
     const buildings = Object.values(state.board.vertices).filter((vertex) => vertex.building);
     expect(buildings).toHaveLength(6);
   });
@@ -864,6 +896,94 @@ describe("setup and production", () => {
     expect(state.players[2].resources.food).toBe(1);
   });
 
+  it("skips players who cannot fulfill a public trade request", () => {
+    let state = setupGame();
+    state.phase = "action";
+    state.currentPlayerId = "p1";
+    state = applyCommand(state, {
+      type: "debugSetResources",
+      playerId: "p1",
+      resources: createResources({ food: 1 })
+    });
+    state = applyCommand(state, {
+      type: "debugSetResources",
+      playerId: "p2",
+      resources: createResources({ wood: 1 })
+    });
+    state = applyCommand(state, {
+      type: "debugSetResources",
+      playerId: "p3",
+      resources: createResources({ wood: 1, ammo: 1 })
+    });
+
+    state = applyCommand(state, {
+      type: "playerTrade",
+      offer: { food: 1 },
+      request: { wood: 1, ammo: 1 }
+    });
+
+    expect(state.pending?.kind).toBe("confirmTrade");
+    if (state.pending?.kind !== "confirmTrade") throw new Error("Expected a pending player trade.");
+    expect(state.pending?.playerId).toBe("p3");
+    expect(state.pending?.candidateTargetIds).toEqual(["p3"]);
+  });
+
+  it("ends a public trade immediately when no other player can fulfill the request", () => {
+    let state = setupGame();
+    state.phase = "action";
+    state.currentPlayerId = "p1";
+    state = applyCommand(state, {
+      type: "debugSetResources",
+      playerId: "p1",
+      resources: createResources({ food: 1 })
+    });
+    state = applyCommand(state, {
+      type: "debugSetResources",
+      playerId: "p2",
+      resources: createResources({ wood: 1 })
+    });
+    state = applyCommand(state, {
+      type: "debugSetResources",
+      playerId: "p3",
+      resources: createResources({ ammo: 1 })
+    });
+
+    state = applyCommand(state, {
+      type: "playerTrade",
+      offer: { food: 1 },
+      request: { wood: 1, ammo: 1 }
+    });
+
+    expect(state.pending).toBeUndefined();
+    expect(state.log[0].message).toContain("没有可回应的玩家");
+  });
+
+  it("automatically rejects a direct trade when the target cannot fulfill the request", () => {
+    let state = setupGame();
+    state.phase = "action";
+    state.currentPlayerId = "p1";
+    state = applyCommand(state, {
+      type: "debugSetResources",
+      playerId: "p1",
+      resources: createResources({ food: 1 })
+    });
+    state = applyCommand(state, {
+      type: "debugSetResources",
+      playerId: "p2",
+      resources: createResources({ wood: 1 })
+    });
+
+    state = applyCommand(state, {
+      type: "playerTrade",
+      targetPlayerId: "p2",
+      offer: { food: 1 },
+      request: { wood: 1, ammo: 1 }
+    });
+
+    expect(state.pending).toBeUndefined();
+    expect(state.log[0].message).toContain("自动拒绝");
+  });
+
   it("shows only own buildings with militia capacity as recruit targets", () => {
     let state = setupGame();
     const player = state.players[0];
@@ -882,6 +1002,7 @@ describe("setup and production", () => {
 
   it("starts discard and zombie movement flow on seven", () => {
     let state = setupGame();
+    const rollerName = state.players.find((player) => player.id === state.currentPlayerId)!.name;
     state = applyCommand(state, {
       type: "debugSetResources",
       playerId: "p1",
@@ -891,6 +1012,11 @@ describe("setup and production", () => {
     expect(state.phase).toBe("zombie");
     expect(state.zombieTrack).toBe(1);
     expect(state.pending?.kind).toBe("discard");
+    expect(state.log.some((entry) => entry.message === `${rollerName} 掷出 3 + 4 = 7，进入尸潮来袭阶段。`)).toBe(
+      true
+    );
+    expect(state.log.some((entry) => entry.message === "掷出 7：进入尸潮阶段。")).toBe(false);
+    expect(state.log.some((entry) => entry.message === "尸潮围城进度 +1，当前为 1/6。")).toBe(true);
     state = applyCommand(state, { type: "discardResources", resources: { food: 4 } });
     expect(state.pending?.kind).toBe("moveZombie");
     const targetTileId = Object.values(state.board.tiles).find(
@@ -940,7 +1066,7 @@ describe("free action phase", () => {
     expect(next.currentPlayerId).toBe("p2");
     expect(next.phase).toBe("prepare");
     expect(next.turn).toBe(state.turn + 1);
-    expect(next.log[0].message).toContain("准备阶段");
+    expect(next.log.some((entry) => entry.message.includes("准备阶段"))).toBe(false);
     expect(next.log.some((entry) => entry.message.includes("操作超时"))).toBe(true);
   });
 
@@ -1030,6 +1156,22 @@ describe("free action phase", () => {
 
     expect(state.board.edges[edge].route?.type).toBe("transport");
     expect(state.players[0].resources).toMatchObject({ wood: 0, metal: 0, fuel: 0 });
+    expect(state.log[0].message).toBe(`${state.players[0].name} 修建运输线。`);
+  });
+
+  it("combines consecutive convoy builds into one counted event log entry", () => {
+    let state = actionGame();
+    Object.values(state.board.tiles).forEach((tile) => {
+      tile.revealed = true;
+    });
+    const firstEdgeId = legalBuildEdges(state, "convoy")[0];
+    expect(firstEdgeId).toBeTruthy();
+    state = applyCommand(state, { type: "buildRoute", edgeId: firstEdgeId, routeType: "convoy", free: true });
+    const secondEdgeId = legalBuildEdges(state, "convoy")[0];
+    expect(secondEdgeId).toBeTruthy();
+    state = applyCommand(state, { type: "buildRoute", edgeId: secondEdgeId, routeType: "convoy", free: true });
+
+    expect(state.log[0].message).toBe(`${state.players[0].name} 建立2支装甲车队。`);
   });
 
   it("allows recruiting and activating militia before trading", () => {
@@ -1092,6 +1234,41 @@ describe("free action phase", () => {
     expect(state.players[0].militia.filter((militia) => militia.vertexId === vertexId)).toHaveLength(2);
     expect(state.players[0].pieces.militia).toBe(piecesBefore - 2);
     expect(state.players[0].devCards.some((card) => card.id === "militia-card")).toBe(false);
+    expect(state.log.some((entry) => entry.message === `${state.players[0].name} 使用【民兵动员】。`)).toBe(true);
+    expect(state.log.some((entry) => entry.message === `${state.players[0].name} 征召2名民兵。`)).toBe(true);
+  });
+
+  it("combines consecutive militia actions into counted event log entries", () => {
+    let state = actionGame();
+    const vertexId = legalRecruitVertices(state)[0];
+    expect(vertexId).toBeTruthy();
+
+    state = applyCommand(state, { type: "recruitMilitia", vertexId });
+    state = applyCommand(state, { type: "recruitMilitia", vertexId });
+    expect(state.log[0].message).toBe(`${state.players[0].name} 征召2名民兵。`);
+
+    const [first, second] = state.players[0].militia.slice(-2);
+    state = applyCommand(state, { type: "activateMilitia", militiaId: first.id });
+    state = applyCommand(state, { type: "activateMilitia", militiaId: second.id });
+    expect(state.log[0].message).toBe(`${state.players[0].name} 激活2名民兵。`);
+  });
+
+  it("writes selected resource gains and tile names clearly in the event log", () => {
+    let state = actionGame();
+    state.pending = {
+      kind: "chooseResource",
+      playerId: state.currentPlayerId,
+      amount: 3,
+      reason: "airdrop"
+    };
+    state = applyCommand(state, { type: "chooseResource", resources: { food: 1, wood: 1, metal: 1 } });
+    expect(state.log[0].message).toBe(`${state.players[0].name} 获得：食物×1 木材×1 金属×1。`);
+
+    const targetTile = Object.values(state.board.tiles).find((tile) => tile.revealed && tile.id !== state.zombieTileId)!;
+    state.phase = "zombie";
+    state.pending = { kind: "moveZombie", playerId: state.currentPlayerId, stealAfterMove: false };
+    state = applyCommand(state, { type: "moveZombie", tileId: targetTile.id });
+    expect(state.log[0].message).toContain(`${targetTile.id}（${TILE_LABELS[targetTile.hiddenType]}）`);
   });
 
   it("lets road crew build its second route from the first queued route", () => {
@@ -1122,6 +1299,7 @@ describe("free action phase", () => {
 
     expect(state.board.edges[firstEdgeId!].route).toMatchObject({ ownerId: state.currentPlayerId, type: "transport" });
     expect(state.board.edges[secondEdgeId!].route).toMatchObject({ ownerId: state.currentPlayerId, type: "transport" });
+    expect(state.log.some((entry) => entry.message === `${state.players[0].name} 修建2条运输线。`)).toBe(true);
   });
 
   it("awards one victory point when a player first camps in a new resource zone", () => {

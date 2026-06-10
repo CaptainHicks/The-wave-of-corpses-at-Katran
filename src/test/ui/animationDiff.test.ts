@@ -88,14 +88,106 @@ describe("diffGameStates", () => {
     )!;
     fortress.building!.type = "fortress";
     previous.zombieTrack = 5;
-    previous.players[0].devCards.push({ id: "zombie-card", type: "zombieApproaches", purchasedTurn: 0 });
+    previous.players
+      .find((player) => player.id === previous.currentPlayerId)!
+      .devCards.push({ id: "zombie-card", type: "zombieApproaches", purchasedTurn: 0 });
     const command: Command = { type: "playDevelopmentCard", cardId: "zombie-card" };
     const next = applyCommand(previous, command);
 
     const events = diffGameStates(previous, next, command, next.currentPlayerId);
 
     const siegeEvent = events.find((event) => event.kind === "zombieSiege");
-    expect(siegeEvent?.durationMs).toBeGreaterThanOrEqual(2400);
+    expect(siegeEvent?.durationMs).toBeGreaterThanOrEqual(5000);
+    expect(siegeEvent?.zombieSiegeResolution).toEqual({
+      strength: 1,
+      defense: 0,
+      successful: false,
+      outcome: "fortressDowngrade",
+      playerNames: [previous.players.find((player) => player.id === previous.currentPlayerId)!.name]
+    });
+  });
+
+  it("summarizes the player who earns the defender point after a successful siege", () => {
+    const previous = enterActionWithResources(setupGame());
+    const defendingPlayer = previous.players.find((player) => player.id === previous.currentPlayerId)!;
+    const fortress = Object.values(previous.board.vertices).find(
+      (item) => item.building?.ownerId === defendingPlayer.id
+    )!;
+    fortress.building!.type = "fortress";
+    defendingPlayer.militia.push({
+      id: "siege-defender",
+      ownerId: defendingPlayer.id,
+      vertexId: fortress.id,
+      status: "active"
+    });
+    previous.zombieTrack = 5;
+    defendingPlayer.devCards.push({ id: "zombie-card", type: "zombieApproaches", purchasedTurn: 0 });
+    const command: Command = { type: "playDevelopmentCard", cardId: "zombie-card" };
+    const next = applyCommand(previous, command);
+
+    const siegeEvent = diffGameStates(previous, next, command, next.currentPlayerId).find(
+      (event) => event.kind === "zombieSiege"
+    );
+
+    expect(siegeEvent?.publicLabel).toBe("成功抵御尸潮");
+    expect(siegeEvent?.zombieSiegeResolution).toEqual({
+      strength: 1,
+      defense: 1,
+      successful: true,
+      outcome: "defenderPoint",
+      playerNames: [defendingPlayer.name]
+    });
+  });
+
+  it("summarizes tied defenders who each earn a development card", () => {
+    const previous = enterActionWithResources(setupGame());
+    const [first, second] = previous.players;
+    const firstFortress = Object.values(previous.board.vertices).find((item) => item.building?.ownerId === first.id)!;
+    const secondFortress = Object.values(previous.board.vertices).find((item) => item.building?.ownerId === second.id)!;
+    firstFortress.building!.type = "fortress";
+    secondFortress.building!.type = "fortress";
+    first.militia.push({ id: "siege-first", ownerId: first.id, vertexId: firstFortress.id, status: "active" });
+    second.militia.push({ id: "siege-second", ownerId: second.id, vertexId: secondFortress.id, status: "active" });
+    previous.zombieTrack = 5;
+    previous.players
+      .find((player) => player.id === previous.currentPlayerId)!
+      .devCards.push({ id: "zombie-card", type: "zombieApproaches", purchasedTurn: 0 });
+    const command: Command = { type: "playDevelopmentCard", cardId: "zombie-card" };
+    const next = applyCommand(previous, command);
+
+    const siegeEvent = diffGameStates(previous, next, command, next.currentPlayerId).find(
+      (event) => event.kind === "zombieSiege"
+    );
+
+    expect(siegeEvent?.zombieSiegeResolution).toEqual({
+      strength: 2,
+      defense: 2,
+      successful: true,
+      outcome: "developmentCards",
+      playerNames: [first.name, second.name]
+    });
+  });
+
+  it("summarizes a successful siege with no reward as no effect", () => {
+    const previous = enterActionWithResources(setupGame());
+    previous.zombieTrack = 5;
+    previous.players
+      .find((player) => player.id === previous.currentPlayerId)!
+      .devCards.push({ id: "zombie-card", type: "zombieApproaches", purchasedTurn: 0 });
+    const command: Command = { type: "playDevelopmentCard", cardId: "zombie-card" };
+    const next = applyCommand(previous, command);
+
+    const siegeEvent = diffGameStates(previous, next, command, next.currentPlayerId).find(
+      (event) => event.kind === "zombieSiege"
+    );
+
+    expect(siegeEvent?.zombieSiegeResolution).toEqual({
+      strength: 0,
+      defense: 0,
+      successful: true,
+      outcome: "none",
+      playerNames: []
+    });
   });
 });
 

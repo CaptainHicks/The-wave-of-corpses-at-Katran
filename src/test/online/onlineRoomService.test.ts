@@ -41,6 +41,47 @@ afterEach(async () => {
 });
 
 describe("OnlineRoomService", () => {
+  it("creates AI seats and runs their setup turns on the server before returning control to the host", async () => {
+    const service = await createService();
+    const host = await service.createRoom({
+      name: "Host",
+      targetPlayerCount: 2,
+      aiPlayerCount: 1,
+      fogEnabled: false
+    });
+
+    expect(host.room.seats).toHaveLength(2);
+    expect(host.room.seats[1]).toMatchObject({
+      controller: "ai",
+      connected: false,
+      factionId: "blue-steel"
+    });
+
+    await service.chooseFaction({
+      roomCode: host.room.roomCode,
+      playerId: host.seat.playerId,
+      factionId: "red-rust"
+    });
+    let room = await service.startRoom({
+      roomCode: host.room.roomCode,
+      viewerPlayerId: host.seat.playerId
+    });
+    room = await service.applyPlayerCommand({
+      roomCode: room.roomCode,
+      viewerPlayerId: host.seat.playerId,
+      command: { type: "placeInitialCamp", vertexId: legalInitialCampVertices(room.gameState!)[0] }
+    });
+    room = await service.applyPlayerCommand({
+      roomCode: room.roomCode,
+      viewerPlayerId: host.seat.playerId,
+      command: { type: "placeInitialRoute", edgeId: legalInitialRouteEdges(room.gameState!)[0] }
+    });
+
+    expect(room.gameState?.currentPlayerId).toBe(host.seat.playerId);
+    expect(Object.values(room.gameState!.board.vertices).filter((vertex) => vertex.building?.ownerId === "p2")).toHaveLength(2);
+    expect(Object.values(room.gameState!.board.edges).filter((edge) => edge.route?.ownerId === "p2")).toHaveLength(2);
+  });
+
   it("creates a lobby, lets a second player join, and starts the game after everyone chooses a faction", async () => {
     const service = await createService();
     const host = await service.createRoom({
@@ -460,15 +501,17 @@ describe("OnlineRoomService", () => {
       playerId: guest.seat.playerId,
       factionId: "blue-steel"
     });
-    await service.startRoom({
+    const room = await service.startRoom({
       roomCode: host.room.roomCode,
       viewerPlayerId: host.seat.playerId
     });
+    const nonCurrentPlayerId =
+      room.gameState?.currentPlayerId === host.seat.playerId ? guest.seat.playerId : host.seat.playerId;
 
     await expect(
       service.applyPlayerCommand({
         roomCode: host.room.roomCode,
-        viewerPlayerId: guest.seat.playerId,
+        viewerPlayerId: nonCurrentPlayerId,
         command: { type: "placeInitialCamp", vertexId: "v-0-0" }
       })
     ).rejects.toThrow(OnlineRoomError);
@@ -515,7 +558,9 @@ describe("OnlineRoomService", () => {
       viewerPlayerId: state.currentPlayerId,
       command: { type: "buildRoute", edgeId: transportEdgeId, routeType: "transport" }
     });
-    expect(afterTransport.gameState?.players[0].resources).toMatchObject({
+    expect(
+      afterTransport.gameState?.players.find((player) => player.id === afterTransport.gameState?.currentPlayerId)?.resources
+    ).toMatchObject({
       wood: 0,
       metal: 0,
       fuel: 1,
@@ -535,7 +580,9 @@ describe("OnlineRoomService", () => {
       viewerPlayerId: state.currentPlayerId,
       command: { type: "buildRoute", edgeId: convoyEdgeId, routeType: "convoy" }
     });
-    expect(afterConvoy.gameState?.players[0].resources).toMatchObject({
+    expect(
+      afterConvoy.gameState?.players.find((player) => player.id === afterConvoy.gameState?.currentPlayerId)?.resources
+    ).toMatchObject({
       wood: 1,
       metal: 1,
       fuel: 0,

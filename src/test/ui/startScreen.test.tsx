@@ -318,7 +318,7 @@ describe("StartScreen", () => {
     expect(view.container.querySelector(".start-local-title.start-secondary-title")).toBeInTheDocument();
     expect(view.container.querySelector(".start-local-board.start-secondary-frame")).toBeInTheDocument();
     expect(view.container.querySelector(".start-local-board .start-local-start-button")).toBeInTheDocument();
-    expect(screen.getByText("围桌协作，轮流指挥幸存者阵营")).toBeInTheDocument();
+    expect(screen.getByText("配置真人与 AI 席位，集结幸存者阵营")).toBeInTheDocument();
 
     view.unmount();
     view = renderStartScreen();
@@ -376,6 +376,7 @@ describe("StartScreen", () => {
     expect(online?.onCreateRoom).toHaveBeenCalledWith({
       name: "测试房主",
       targetPlayerCount: 2,
+      aiPlayerCount: 0,
       fogEnabled: false
     });
   });
@@ -540,8 +541,10 @@ describe("StartScreen", () => {
     expect(command.players[0]).toMatchObject({
       name: "Scout Lead",
       factionId: PLAYER_FACTIONS[0].id,
-      color: PLAYER_FACTIONS[0].color
+      color: PLAYER_FACTIONS[0].color,
+      controller: "human"
     });
+    expect(command.players[1].controller).toBe("ai");
     expect(command.players).toHaveLength(4);
     expect(command.players[4]?.factionId).toBeUndefined();
   });

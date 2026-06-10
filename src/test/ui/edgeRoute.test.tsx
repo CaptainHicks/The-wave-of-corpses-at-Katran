@@ -59,5 +59,6 @@ describe("EdgeRoute piece assets", () => {
     expect(container.querySelector(".edge-route-group")?.getAttribute("style")).toContain(
       "--route-glow: rgba(142, 91, 183, 0.48)"
     );
+    expect(container.querySelector(".route-piece")).toHaveAttribute("filter", "url(#route-vivid-p1-transport)");
   });
 });

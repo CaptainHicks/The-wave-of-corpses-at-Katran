@@ -169,5 +169,6 @@ describe("VertexToken militia count marker", () => {
     expect(container.querySelector(".building-piece")?.getAttribute("style")).toContain(
       "--piece-glow: rgba(142, 91, 183, 0.44)"
     );
+    expect(container.querySelector(".building-piece")).toHaveAttribute("filter", "url(#building-vivid-p1-camp)");
   });
 });

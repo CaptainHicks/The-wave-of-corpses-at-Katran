@@ -45,7 +45,7 @@ function createState(player: PlayerState): GameState {
 
 function firePointer(
   target: Document | Node | Element | Window,
-  type: "pointerdown" | "pointermove" | "pointerup",
+  type: "pointerdown" | "pointermove" | "pointerup" | "pointercancel",
   init: { pointerId: number; pointerType: "touch"; clientX: number; clientY: number }
 ) {
   const event = new Event(type, { bubbles: true, cancelable: true });
@@ -236,6 +236,29 @@ describe("DevCardHand touch interactions", () => {
     expect(submit).toHaveBeenCalledWith({ type: "playDevelopmentCard", cardId: "dev-1" });
   });
 
+  it("plays when pointer capture delivers the release back to the card", () => {
+    const player = createPlayer();
+    const submit = vi.fn();
+    const { container } = render(
+      <DevCardHand
+        state={createState(player)}
+        player={player}
+        submit={submit}
+        setTool={vi.fn()}
+        setSelection={vi.fn()}
+      />
+    );
+
+    const card = container.querySelector(".dev-hand-card") as HTMLElement;
+    elementFromPointMock.mockReturnValue(card);
+
+    firePointer(card, "pointerdown", { pointerId: 1, pointerType: "touch", clientX: 50, clientY: 300 });
+    firePointer(card, "pointermove", { pointerId: 1, pointerType: "touch", clientX: 50, clientY: 205 });
+    firePointer(card, "pointerup", { pointerId: 1, pointerType: "touch", clientX: 50, clientY: 205 });
+
+    expect(submit).toHaveBeenCalledWith({ type: "playDevelopmentCard", cardId: "dev-1" });
+  });
+
   it("opens a resource choice before playing requisition", () => {
     const player = createPlayer([{ id: "req-1", type: "requisition", purchasedTurn: 1 }]);
     const submit = vi.fn();
@@ -359,6 +382,59 @@ describe("DevCardHand touch interactions", () => {
     expect(card).toHaveClass("touch-play-ready");
 
     fireTouch(window, "touchend", { identifier: 7, clientX: 50, clientY: 205 });
+    expect(submit).toHaveBeenCalledWith({ type: "playDevelopmentCard", cardId: "dev-1" });
+  });
+
+  it("keeps the touch fallback when pointer and touch events describe the same gesture", () => {
+    const player = createPlayer();
+    const submit = vi.fn();
+    const { container } = render(
+      <DevCardHand
+        state={createState(player)}
+        player={player}
+        submit={submit}
+        setTool={vi.fn()}
+        setSelection={vi.fn()}
+      />
+    );
+
+    const card = container.querySelector(".dev-hand-card") as HTMLElement;
+    elementFromPointMock.mockReturnValue(card);
+
+    firePointer(card, "pointerdown", { pointerId: 4, pointerType: "touch", clientX: 50, clientY: 300 });
+    fireTouch(card, "touchstart", { identifier: 7, clientX: 50, clientY: 300 });
+    firePointer(window, "pointercancel", { pointerId: 4, pointerType: "touch", clientX: 50, clientY: 300 });
+    fireTouch(window, "touchmove", { identifier: 7, clientX: 50, clientY: 205 });
+
+    expect(card).toHaveClass("touch-play-ready");
+
+    fireTouch(window, "touchend", { identifier: 7, clientX: 50, clientY: 205 });
+    expect(submit).toHaveBeenCalledWith({ type: "playDevelopmentCard", cardId: "dev-1" });
+  });
+
+  it("keeps Chromium pointer dragging when its matching touchstart coordinates differ", () => {
+    const player = createPlayer();
+    const submit = vi.fn();
+    const { container } = render(
+      <DevCardHand
+        state={createState(player)}
+        player={player}
+        submit={submit}
+        setTool={vi.fn()}
+        setSelection={vi.fn()}
+      />
+    );
+
+    const card = container.querySelector(".dev-hand-card") as HTMLElement;
+    elementFromPointMock.mockReturnValue(card);
+
+    firePointer(card, "pointerdown", { pointerId: 4, pointerType: "touch", clientX: 50, clientY: 300 });
+    fireTouch(card, "touchstart", { identifier: 7, clientX: 54, clientY: 304 });
+    firePointer(window, "pointermove", { pointerId: 4, pointerType: "touch", clientX: 50, clientY: 205 });
+
+    expect(card).toHaveClass("touch-play-ready");
+
+    firePointer(window, "pointerup", { pointerId: 4, pointerType: "touch", clientX: 50, clientY: 205 });
     expect(submit).toHaveBeenCalledWith({ type: "playDevelopmentCard", cardId: "dev-1" });
   });
 

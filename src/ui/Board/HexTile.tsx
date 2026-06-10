@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import type { TileState } from "../../domain/types";
 import { boardMarkerAssets, tileAssets } from "../art/assetManifest";
 import { TileNumberToken } from "./TileNumberToken";
+import { useImmediateBoardActivation } from "./useImmediateBoardActivation";
 
 function boundsForPoints(points: string): { x: number; y: number; width: number; height: number } {
   const parsed = points
@@ -54,9 +55,10 @@ export function HexTile({
   const numberX = shouldShowNumber && hasMerchant ? tile.x - 17 : tile.x;
   const zombieCenterX = hasZombie && hasMerchant ? tile.x - 17 : tile.x;
   const merchantCenterX = hasZombie || shouldShowNumber ? tile.x + 17 : tile.x;
+  const activationHandlers = useImmediateBoardActivation(onClick);
 
   return (
-    <g onClick={onClick} className="tile-group" data-tile-id={tile.id} aria-label={asset.alt}>
+    <g {...activationHandlers} className="tile-group" data-tile-id={tile.id} aria-label={asset.alt}>
       {asset.imageUrl && (
         <defs>
           <clipPath id={imageClipId}>

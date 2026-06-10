@@ -340,7 +340,7 @@ describe("RightOperationDock", () => {
     fireEvent.click(container.querySelector<HTMLButtonElement>(".dock-menu-button")!);
     expect(document.body.querySelector(".debug-row")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /补给当前玩家/ })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /推进尸潮进度/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /推进尸潮围城进度/ })).toBeDisabled();
     expect(container.querySelector(".debug-drawer")).not.toBeInTheDocument();
 
     cleanup();
@@ -362,7 +362,7 @@ describe("RightOperationDock", () => {
     fireEvent.click(debugRender.container.querySelector<HTMLButtonElement>(".dock-menu-button")!);
     expect(document.body.querySelector(".debug-row")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /补给当前玩家/ })).toBeEnabled();
-    expect(screen.getByRole("button", { name: /推进尸潮进度/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /推进尸潮围城进度/ })).toBeEnabled();
     expect(debugRender.container.querySelector(".debug-drawer")).toBeInTheDocument();
   });
 
@@ -389,6 +389,7 @@ describe("RightOperationDock", () => {
         onClear={vi.fn()}
       />
     );
+    fireEvent.click(screen.getByRole("button", { name: "银行 / 黑市" }));
     const giveMetal = () => within(screen.getByRole("group", { name: "选择支出" })).getByRole("button", { name: "金属" });
 
     fireEvent.click(giveMetal());
@@ -409,6 +410,7 @@ describe("RightOperationDock", () => {
       />
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "银行 / 黑市" }));
     await waitFor(() => expect(giveMetal()).toHaveAttribute("aria-pressed", "false"));
     expect(setTool).toHaveBeenLastCalledWith("none");
     expect(setSelection).toHaveBeenLastCalledWith(undefined);
@@ -464,18 +466,13 @@ describe("RightOperationDock", () => {
       />
     );
 
-    const bankTradeButton = container.querySelector<HTMLButtonElement>(".trade-panel-actions button");
-
-    expect(screen.getByRole("button", { name: "银行 / 黑市" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "玩家报价" })).toHaveAttribute("aria-pressed", "false");
-    expect(container.querySelectorAll(".bank-resource-choice button[aria-pressed='true']")).toHaveLength(0);
-    expect(bankTradeButton).toBeDisabled();
-    expect(container.querySelector(".player-trade-box")).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: "玩家报价" }));
-
     const offerCounts = container.querySelectorAll<HTMLElement>(".player-trade-box .resource-stepper b");
     const offerButton = container.querySelector<HTMLButtonElement>(".player-trade-box .inline-actions button");
+    const playerTradeButton = screen.getByRole("button", { name: "玩家报价" });
+    const bankTradeButton = screen.getByRole("button", { name: "银行 / 黑市" });
+    expect(bankTradeButton).toHaveAttribute("aria-pressed", "false");
+    expect(playerTradeButton).toHaveAttribute("aria-pressed", "true");
+    expect(playerTradeButton.compareDocumentPosition(bankTradeButton)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(container.querySelector(".bank-resource-choices")).toBeNull();
     expect([...offerCounts].every((item) => item.textContent === "0")).toBe(true);
     expect(offerButton).toBeDisabled();
@@ -500,6 +497,7 @@ describe("RightOperationDock", () => {
       />
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "银行 / 黑市" }));
     const giveChoices = within(screen.getByRole("group", { name: "选择支出" }));
     const receiveChoices = within(screen.getByRole("group", { name: "选择获得" }));
     fireEvent.click(giveChoices.getByRole("button", { name: "食物" }));

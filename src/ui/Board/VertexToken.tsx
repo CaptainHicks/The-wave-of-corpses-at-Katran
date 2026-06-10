@@ -1,7 +1,8 @@
-import type { CSSProperties, MouseEvent } from "react";
+import type { CSSProperties } from "react";
 import type { BuildingType, Militia, PlayerState, VertexState } from "../../domain/types";
 import { boardMarkerAssets, getBuildingPieceAsset } from "../art/assetManifest";
-import { buildingPieceColorStyle } from "./pieceColorStyles";
+import { buildingPieceColorStyle, buildingPieceFilterId } from "./pieceColorStyles";
+import { useImmediateBoardActivation } from "./useImmediateBoardActivation";
 
 const BUILDING_PIECE_BOX = {
   camp: {
@@ -84,6 +85,7 @@ export function VertexToken({
     pieceBox && vertex.building
       ? vertex.x + pieceBox.width * (vertex.building.type === "fortress" ? 0.42 : 0.64)
       : vertex.x;
+  const activationHandlers = useImmediateBoardActivation(onClick);
 
   return (
     <g
@@ -91,10 +93,7 @@ export function VertexToken({
         hasPreviewBuilding ? "has-building-preview" : ""
       } ${hasExpandedHitArea ? "has-expanded-hit-area" : ""} ${coarsePointer ? "has-coarse-hit-area" : ""} ${legal ? "legal" : ""}`}
       data-vertex-id={vertex.id}
-      onClick={(event: MouseEvent<SVGGElement>) => {
-        event.stopPropagation();
-        onClick();
-      }}
+      {...activationHandlers}
     >
       <circle
         className={`vertex-hit-area ${hasPreviewBuilding || hasExpandedHitArea ? "preview-hit-area" : ""}`}
@@ -119,7 +118,7 @@ export function VertexToken({
           aria-hidden="true"
         />
       )}
-      {vertex.building && buildingAsset && pieceBox && (
+      {vertex.building && buildingAsset && buildingOwner && pieceBox && (
         <>
           {hasLegalBuildingTarget && (
             <image
@@ -146,6 +145,7 @@ export function VertexToken({
               legal ? "legal-building-target" : ""
             }`}
             style={buildingPieceStyle}
+            filter={`url(#${buildingPieceFilterId(buildingOwner.id, vertex.building.type)})`}
             aria-hidden="true"
           />
         </>

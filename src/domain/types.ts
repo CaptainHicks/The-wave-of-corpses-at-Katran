@@ -105,11 +105,24 @@ export interface Militia {
   activatedTurn?: number;
 }
 
+export type AiStrategyKind = "expansion" | "fortification" | "supply" | "militia" | "development";
+
+export interface AiStrategyPlan {
+  kind: AiStrategyKind;
+  chosenTurn: number;
+  reviewedTurn: number;
+  commitmentUntilTurn: number;
+  progress: number;
+  lastProgressTurn: number;
+}
+
 export interface PlayerState {
   id: string;
   name: string;
   color: string;
   factionId?: string;
+  controller?: "human" | "ai";
+  aiStrategy?: AiStrategyPlan;
   resources: Resources;
   devCards: DevCard[];
   militia: Militia[];
@@ -216,7 +229,7 @@ export interface GameState {
 export type Command =
   | {
       type: "createGame";
-      players: Array<{ name: string; color: string; factionId?: string }>;
+      players: Array<{ name: string; color: string; factionId?: string; controller?: "human" | "ai" }>;
       seed?: string;
       debugMode?: boolean;
       fogEnabled?: boolean;

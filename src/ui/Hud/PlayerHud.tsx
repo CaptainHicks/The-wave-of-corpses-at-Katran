@@ -57,6 +57,7 @@ export function PlayerHud({
               </div>
               <div className="player-nameplate">
                 <strong>{player.name}</strong>
+                {player.controller === "ai" && <small className="player-controller-badge">AI</small>}
                 {isCurrent && <span className="current-player-signal" aria-hidden="true" />}
               </div>
               <button

@@ -1,6 +1,6 @@
 import { RESOURCES, ZOMBIE_TRACK_LIMIT } from "../../domain/constants";
 import type { Command, GameState, PlayerState, Resource } from "../../domain/types";
-import type { GameAnimationInput } from "./animationTypes";
+import type { GameAnimationInput, ZombieSiegeResolution } from "./animationTypes";
 
 export function diffGameStates(
   previous: GameState,
@@ -64,11 +64,13 @@ export function diffGameStates(
   }
 
   if (previous.zombieTrack >= ZOMBIE_TRACK_LIMIT - 1 && next.zombieTrack === 0 && previous.zombieTrack !== next.zombieTrack) {
+    const resolution = summarizeZombieSiege(previous);
     add({
       kind: "zombieSiege",
       targetId: next.zombieTileId,
-      publicLabel: "尸潮围城",
-      durationMs: 2400
+      publicLabel: resolution.successful ? "成功抵御尸潮" : "防御失败",
+      zombieSiegeResolution: resolution,
+      durationMs: 5200
     });
   }
 
@@ -82,6 +84,46 @@ export function diffGameStates(
   }
 
   return events;
+}
+
+function summarizeZombieSiege(state: GameState): ZombieSiegeResolution {
+  const strength = Object.values(state.board.vertices).filter(
+    (vertex) => vertex.building?.type === "fortress"
+  ).length;
+  const activeByPlayer = new Map(
+    state.players.map((player) => [
+      player.id,
+      player.militia.filter((militia) => militia.status === "active").length
+    ])
+  );
+  const defense = [...activeByPlayer.values()].reduce((sum, count) => sum + count, 0);
+
+  if (defense >= strength) {
+    const max = Math.max(...activeByPlayer.values());
+    const leaders = state.players.filter((player) => activeByPlayer.get(player.id) === max && max > 0);
+    return {
+      strength,
+      defense,
+      successful: true,
+      outcome: leaders.length === 1 ? "defenderPoint" : leaders.length > 1 ? "developmentCards" : "none",
+      playerNames: leaders.map((player) => player.name)
+    };
+  }
+
+  const fortressOwners = state.players.filter((player) =>
+    Object.values(state.board.vertices).some(
+      (vertex) => vertex.building?.ownerId === player.id && vertex.building.type === "fortress"
+    )
+  );
+  const minimumDefense = Math.min(...fortressOwners.map((player) => activeByPlayer.get(player.id) ?? 0));
+  const losers = fortressOwners.filter((player) => (activeByPlayer.get(player.id) ?? 0) === minimumDefense);
+  return {
+    strength,
+    defense,
+    successful: false,
+    outcome: "fortressDowngrade",
+    playerNames: losers.map((player) => player.name)
+  };
 }
 
 function addResourceDiffs(

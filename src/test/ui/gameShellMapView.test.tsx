@@ -55,7 +55,15 @@ function renderGameShellWithSiegeAlert() {
           kind: "zombieSiege" as never,
           turn: 1,
           createdAt: Date.now(),
-          durationMs: 2400
+          durationMs: 5200,
+          publicLabel: "防御失败",
+          zombieSiegeResolution: {
+            strength: 3,
+            defense: 1,
+            successful: false,
+            outcome: "fortressDowngrade",
+            playerNames: ["A", "C"]
+          }
         }
       ]}
       animationBusy={true}
@@ -337,6 +345,47 @@ describe("GameShell map view", () => {
     expect(readMapPanTransform(world).y).toBeCloseTo(28);
   });
 
+  it("can pan immediately after a touch tap activates a board target", async () => {
+    const state = applyCommand(undefined, { type: "createGame", players: players(), seed: "touch-pan-after-board-tap" });
+    const submit = vi.fn();
+    const { container } = renderGameShell({ state, submit });
+    const layer = container.querySelector(".map-layer") as HTMLElement;
+    const world = container.querySelector(".map-world") as HTMLElement;
+    const vertexId = legalInitialCampVertices(state)[0];
+    const target = container.querySelector(`[data-vertex-id="${vertexId}"]`)!;
+
+    dispatchPointerEvent(target, "pointerdown", {
+      pointerId: 1,
+      clientX: 420,
+      clientY: 320,
+      pointerType: "touch"
+    });
+    dispatchPointerEvent(target, "pointerup", {
+      pointerId: 1,
+      clientX: 420,
+      clientY: 320,
+      pointerType: "touch"
+    });
+
+    dispatchPointerEvent(layer, "pointerdown", {
+      pointerId: 2,
+      clientX: 400,
+      clientY: 300,
+      pointerType: "touch"
+    });
+    dispatchPointerEvent(layer, "pointermove", {
+      pointerId: 2,
+      buttons: 1,
+      clientX: 440,
+      clientY: 325,
+      pointerType: "touch"
+    });
+
+    expect(submit).toHaveBeenCalledWith({ type: "placeInitialCamp", vertexId });
+    await waitFor(() => expect(readMapPanTransform(world).x).toBeCloseTo(40));
+    expect(readMapPanTransform(world).y).toBeCloseTo(25);
+  });
+
   it("supports pinch zoom and two-finger panning on touch devices", async () => {
     const { container } = renderGameShell();
     const layer = container.querySelector(".map-layer") as HTMLElement;
@@ -356,8 +405,11 @@ describe("GameShell map view", () => {
   it("shows a temporary centered zombie siege alert", () => {
     const { container, getByText } = renderGameShellWithSiegeAlert();
 
-    expect(getByText("尸潮围城")).toBeInTheDocument();
-    expect(getByText("所有防线接受尸潮冲击")).toBeInTheDocument();
-    expect(container.querySelector(".zombie-siege-alert")).toHaveStyle({ "--siege-alert-duration": "2400ms" });
+    expect(getByText("尸潮围城结算")).toBeInTheDocument();
+    expect(getByText("防御失败")).toBeInTheDocument();
+    expect(getByText("尸潮强度")).toBeInTheDocument();
+    expect(getByText("玩家防御")).toBeInTheDocument();
+    expect(getByText("A、C 的 1 座堡垒将被破坏并降级为营地")).toBeInTheDocument();
+    expect(container.querySelector(".zombie-siege-alert")).toHaveStyle({ "--siege-alert-duration": "5200ms" });
   });
 });

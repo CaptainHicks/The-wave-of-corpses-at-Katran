@@ -12,6 +12,14 @@ export type GameAnimationKind =
   | "zombieTrackAdvance"
   | "zombieSiege";
 
+export interface ZombieSiegeResolution {
+  strength: number;
+  defense: number;
+  successful: boolean;
+  outcome: "defenderPoint" | "developmentCards" | "fortressDowngrade" | "none";
+  playerNames: string[];
+}
+
 export interface GameAnimationEvent {
   id: string;
   kind: GameAnimationKind;
@@ -25,6 +33,7 @@ export interface GameAnimationEvent {
   createdAt: number;
   durationMs: number;
   privateResource?: boolean;
+  zombieSiegeResolution?: ZombieSiegeResolution;
 }
 
 export type GameAnimationInput = Omit<GameAnimationEvent, "createdAt" | "durationMs"> &

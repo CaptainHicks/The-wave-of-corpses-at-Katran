@@ -168,6 +168,19 @@ describe("BoardView interaction targets", () => {
     expect(tile?.querySelector("title")).toBeNull();
   });
 
+  it("activates a board target on touch pointer release without repeating the synthesized click", () => {
+    const state = applyCommand(undefined, { type: "createGame", players: players(), seed: "touch-pointer-activation" });
+    const vertexId = legalInitialCampVertices(state)[0];
+    const { container, submit } = renderBoard(state, "none");
+    const vertex = container.querySelector(`[data-vertex-id="${vertexId}"]`)!;
+
+    fireEvent.pointerUp(vertex, { pointerId: 1, pointerType: "touch" });
+    fireEvent.click(vertex);
+
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(submit).toHaveBeenCalledWith({ type: "placeInitialCamp", vertexId });
+  });
+
   it("removes visible camp previews during initial setup while keeping a larger hit area", () => {
     const state = applyCommand(undefined, { type: "createGame", players: players(), seed: "initial-camp-markers" });
     const legalVertices = legalInitialCampVertices(state);
@@ -522,7 +535,7 @@ describe("BoardView interaction targets", () => {
     const militiaId = "p1-active-move-test";
     state.board.edges[edgeId].route = { ownerId: playerId, type: "transport" };
     state.board.vertices[targetId].building = { ownerId: playerId, type: "camp" };
-    state.players[0].militia.push({
+    state.players.find((player) => player.id === playerId)!.militia.push({
       id: militiaId,
       ownerId: playerId,
       vertexId: source.id,

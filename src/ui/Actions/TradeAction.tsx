@@ -26,7 +26,7 @@ export function TradeAction({
   const [tradeTarget, setTradeTarget] = useState(PUBLIC_TRADE_TARGET);
   const [playerOffer, setPlayerOffer] = useState<Resources>(() => createResources());
   const [playerRequest, setPlayerRequest] = useState<Resources>(() => createResources());
-  const [tradeMode, setTradeMode] = useState<TradeMode>("bank");
+  const [tradeMode, setTradeMode] = useState<TradeMode>("player");
   const [tradeHintSource, setTradeHintSource] = useState<TradeHintSource>();
   const bestRate = tradeGive ? bestTradeRate(state, tradeGive) : 4;
   const canBankTrade =
@@ -96,17 +96,6 @@ export function TradeAction({
       <div className="segmented small trade-mode-selector" role="group" aria-label="交易方式">
         <button
           type="button"
-          className={tradeMode === "bank" ? "active" : ""}
-          aria-pressed={tradeMode === "bank"}
-          onClick={() => {
-            setTradeMode("bank");
-            setTradeHintSource(hasBankTradeHint ? "bank" : undefined);
-          }}
-        >
-          银行 / 黑市
-        </button>
-        <button
-          type="button"
           className={tradeMode === "player" ? "active" : ""}
           aria-pressed={tradeMode === "player"}
           onClick={() => {
@@ -115,6 +104,17 @@ export function TradeAction({
           }}
         >
           玩家报价
+        </button>
+        <button
+          type="button"
+          className={tradeMode === "bank" ? "active" : ""}
+          aria-pressed={tradeMode === "bank"}
+          onClick={() => {
+            setTradeMode("bank");
+            setTradeHintSource(hasBankTradeHint ? "bank" : undefined);
+          }}
+        >
+          银行 / 黑市
         </button>
       </div>
 

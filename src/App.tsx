@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { activeDecisionPlayer, isAiPlayer, runAiUntilHuman } from "./domain/ai";
 import { applyCommand, serializeStateForText, RuleError } from "./domain/rules";
 import type { Command, GameState } from "./domain/types";
 import { buildOnlineViewRevision, materializeOnlineGameState } from "./online/clientState";
@@ -63,6 +64,7 @@ function App() {
   const [operationContext, setOperationContext] = useState<UiOperationContext>();
   const [privacy, setPrivacy] = useState(false);
   const [lastSeatPlayerId, setLastSeatPlayerId] = useState<string | undefined>();
+  const [localViewerPlayerId, setLocalViewerPlayerId] = useState<string | undefined>();
   const ruleHintTimerRef = useRef<number>();
   const ruleHintIdRef = useRef(0);
   const [criticalGameArtReady, setCriticalGameArtReady] = useState(isCriticalGameArtPreloadComplete);
@@ -156,13 +158,14 @@ function App() {
       }
       return;
     }
-    const viewerPlayerId = model.state.pending?.playerId ?? model.state.currentPlayerId;
+    const viewerPlayerId =
+      localViewerPlayerId ?? model.state.players.find((player) => !isAiPlayer(player))?.id ?? model.state.currentPlayerId;
     const animationInputs = diffGameStates(previous, model.state, command, viewerPlayerId);
     pushEvents(animationInputs);
     gameAudio.playAnimationEvents(animationInputs);
     previousStateRef.current = undefined;
     lastCommandRef.current = undefined;
-  }, [model.error, model.state, pushEvents]);
+  }, [localViewerPlayerId, model.error, model.state, pushEvents]);
 
   useEffect(() => {
     if (!onlineState || !onlineSession.gameView) {
@@ -185,8 +188,20 @@ function App() {
   useEffect(() => {
     if (!localState) return;
     const nextSeatPlayerId = localState.pending?.playerId ?? localState.currentPlayerId;
-    if (lastSeatPlayerId && nextSeatPlayerId !== lastSeatPlayerId && localState.phase !== "setup") {
+    const nextSeatPlayer = localState.players.find((player) => player.id === nextSeatPlayerId);
+    const humanPlayers = localState.players.filter((player) => !isAiPlayer(player));
+    if (nextSeatPlayer && !isAiPlayer(nextSeatPlayer)) {
+      setLocalViewerPlayerId(nextSeatPlayer.id);
+    }
+    if (
+      lastSeatPlayerId &&
+      nextSeatPlayerId !== lastSeatPlayerId &&
+      humanPlayers.length > 1 &&
+      !isAiPlayer(nextSeatPlayer)
+    ) {
       setPrivacy(true);
+    } else if (isAiPlayer(nextSeatPlayer) || humanPlayers.length === 1) {
+      setPrivacy(false);
     }
     setLastSeatPlayerId(nextSeatPlayerId);
   }, [lastSeatPlayerId, localState?.currentPlayerId, localState?.pending?.playerId, localState?.phase]);
@@ -228,9 +243,10 @@ function App() {
     clearRuleHint();
     try {
       const nextState = applyCommand(localState, command);
+      const settledState = runAiUntilHuman(nextState).state;
       previousStateRef.current = localState;
       lastCommandRef.current = command;
-      dispatch({ type: "import", state: nextState });
+      dispatch({ type: "import", state: settledState });
       dispatch({ type: "error", message: undefined });
       setSelection(undefined);
       setOperationContext(undefined);
@@ -247,6 +263,22 @@ function App() {
       dispatch({ type: "error", message: error instanceof Error ? error.message : "\u53d1\u751f\u672a\u77e5\u9519\u8bef\u3002" });
     }
   };
+
+  useEffect(() => {
+    if (!localState || !isAiPlayer(activeDecisionPlayer(localState))) return;
+    setPrivacy(false);
+    const timer = window.setTimeout(() => {
+      const result = runAiUntilHuman(localState);
+      if (result.state === localState) return;
+      previousStateRef.current = undefined;
+      lastCommandRef.current = undefined;
+      dispatch({ type: "import", state: result.state });
+      dispatch({ type: "error", message: undefined });
+      setSelection(undefined);
+      setOperationContext(undefined);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [localState]);
 
   const submitOnline = (command: Command) => {
     if (!onlineSession.gameView) return;
@@ -266,6 +298,7 @@ function App() {
     setSavedGame(loadGame());
     setPrivacy(false);
     setLastSeatPlayerId(undefined);
+    setLocalViewerPlayerId(undefined);
     setOperationContext(undefined);
   };
 
@@ -277,10 +310,15 @@ function App() {
     dispatch({ type: "import", state: savedGame });
     setOperationContext(undefined);
     setLastSeatPlayerId(nextSeatPlayerId);
+    setLocalViewerPlayerId(
+      savedGame.players.find((player) => player.id === nextSeatPlayerId && !isAiPlayer(player))?.id ??
+        savedGame.players.find((player) => !isAiPlayer(player))?.id
+    );
     setPrivacy(
       Boolean(
         savedGame.pending &&
           savedGame.pending.playerId !== savedGame.currentPlayerId &&
+          savedGame.players.filter((player) => !isAiPlayer(player)).length > 1 &&
           savedGame.phase !== "setup"
       )
     );
@@ -333,7 +371,7 @@ function App() {
 
   const viewerPlayerId =
     localState
-      ? localState.pending?.playerId ?? localState.currentPlayerId
+      ? localViewerPlayerId ?? localState.players.find((player) => !isAiPlayer(player))?.id ?? localState.currentPlayerId
       : onlineSession.gameView?.viewerPlayerId ?? activeState.currentPlayerId;
   const pendingPlayerId = localState?.pending?.playerId ?? onlineSession.gameView?.publicState.pending?.playerId;
   const currentPlayer = activeState.players.find((player) => player.id === activeState.currentPlayerId)!;
@@ -365,6 +403,7 @@ function App() {
       viewerPlayerId={viewerPlayerId}
       pendingPlayerId={pendingPlayerId}
       interactionMode={localState ? "hot-seat" : "online"}
+      turnReminderEnabled={!localState || localState.players.filter((player) => !isAiPlayer(player)).length === 1}
       onlineRoomCode={onlineSession.gameView?.roomMeta.roomCode}
       onlineConnectionState={onlineSession.connectionState}
       onlineCommandBusy={!localState && onlineSession.busy}

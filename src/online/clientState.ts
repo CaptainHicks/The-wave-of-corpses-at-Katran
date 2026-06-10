@@ -59,6 +59,7 @@ function materializePlayer(viewerSafePlayer: OnlineGameView["publicState"]["play
     name: viewerSafePlayer.name,
     color: viewerSafePlayer.color,
     factionId: viewerSafePlayer.factionId,
+    controller: viewerSafePlayer.controller,
     resources: isViewer ? view.viewerPrivate.resources : createResources(),
     devCards: isViewer ? view.viewerPrivate.devCards : viewerSafePlayer.revealedDevCards,
     militia: viewerSafePlayer.militia,

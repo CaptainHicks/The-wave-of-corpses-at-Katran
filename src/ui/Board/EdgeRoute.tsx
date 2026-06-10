@@ -1,7 +1,8 @@
-import type { CSSProperties, MouseEvent } from "react";
+import type { CSSProperties } from "react";
 import type { EdgeState, PlayerState, RouteType, VertexState } from "../../domain/types";
 import { getRoutePieceAsset } from "../art/assetManifest";
-import { routePieceColorStyle } from "./pieceColorStyles";
+import { routePieceColorStyle, routePieceFilterId } from "./pieceColorStyles";
+import { useImmediateBoardActivation } from "./useImmediateBoardActivation";
 
 export function EdgeRoute({
   edge,
@@ -59,8 +60,9 @@ export function EdgeRoute({
       ? routePieceColorStyle(previewOwner.color)
       : undefined;
   const hasRouteSelectionOutline = Boolean(edge.route && routeAsset && (legal || selected || queued));
+  const activationHandlers = useImmediateBoardActivation(onClick);
 
-  if (edge.route && routeAsset) {
+  if (edge.route && routeAsset && owner) {
     return (
       <g
         className={`edge-route-group route-${edge.route.type} ${legal ? "legal" : ""} ${
@@ -68,10 +70,7 @@ export function EdgeRoute({
         }`}
         data-edge-id={edge.id}
         style={routeStyle}
-        onClick={(event: MouseEvent<SVGGElement>) => {
-          event.stopPropagation();
-          onClick();
-        }}
+        {...activationHandlers}
       >
         {hasRouteSelectionOutline && (
           <image
@@ -96,6 +95,7 @@ export function EdgeRoute({
           preserveAspectRatio="xMidYMid meet"
           transform={`rotate(${routeAngle} ${midX} ${midY})`}
           className={`route-piece route-piece-${edge.route.type}`}
+          filter={`url(#${routePieceFilterId(owner.id, edge.route.type)})`}
           aria-hidden="true"
         />
         <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={`edge edge-hitbox ${coarsePointer ? "coarse-hitbox" : ""}`} />
@@ -111,10 +111,7 @@ export function EdgeRoute({
         }`}
         data-edge-id={edge.id}
         style={previewStyle}
-        onClick={(event: MouseEvent<SVGGElement>) => {
-          event.stopPropagation();
-          onClick();
-        }}
+        {...activationHandlers}
       >
         <image
           href={previewAsset}
@@ -140,10 +137,7 @@ export function EdgeRoute({
       className="edge-route-group"
       style={routeStyle}
       data-edge-id={edge.id}
-      onClick={(event: MouseEvent<SVGGElement>) => {
-        event.stopPropagation();
-        onClick();
-      }}
+      {...activationHandlers}
     >
       <line
         x1={a.x}

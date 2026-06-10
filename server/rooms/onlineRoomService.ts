@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { PLAYER_FACTIONS } from "../../src/domain/constants";
+import { runAiUntilHuman } from "../../src/domain/ai";
 import { authorizeCommandForPlayer, OnlineAuthorizationError } from "../../src/online/authorization";
 import { applyCommand, createGame } from "../../src/domain/rules";
 import type { Command } from "../../src/domain/types";
@@ -31,14 +32,24 @@ export class OnlineRoomService {
   async createRoom(input: {
     name: string;
     targetPlayerCount: number;
+    aiPlayerCount?: number;
     fogEnabled: boolean;
   }): Promise<{ room: StoredOnlineRoom; seat: StoredRoomSeat }> {
     await this.store.removeExpiredRooms();
     assertTargetPlayerCount(input.targetPlayerCount);
+    const aiPlayerCount = input.aiPlayerCount ?? 0;
+    assertAiPlayerCount(aiPlayerCount, input.targetPlayerCount);
 
     const timestamp = this.now();
     const roomCode = await this.generateRoomCode();
     const seat = this.createSeat(1, input, timestamp);
+    const aiSeats = Array.from({ length: aiPlayerCount }, (_, index) => {
+      const faction = PLAYER_FACTIONS[index + 1];
+      return this.createSeat(index + 2, { name: `${faction.name} AI` }, timestamp, {
+        controller: "ai",
+        factionId: faction.id
+      });
+    });
     const room: StoredOnlineRoom = {
       roomCode,
       hostPlayerId: seat.playerId,
@@ -47,8 +58,11 @@ export class OnlineRoomService {
       targetPlayerCount: input.targetPlayerCount,
       createdAt: timestamp,
       updatedAt: timestamp,
-      seats: [seat],
-      chatMessages: [this.createSystemChatMessage(`${seat.name} 创建了房间。`, timestamp)]
+      seats: [seat, ...aiSeats],
+      chatMessages: [
+        this.createSystemChatMessage(`${seat.name} 创建了房间。`, timestamp),
+        ...(aiSeats.length > 0 ? [this.createSystemChatMessage(`已加入 ${aiSeats.length} 名 AI 玩家。`, timestamp)] : [])
+      ]
     };
     await this.store.saveRoom(room);
     return { room, seat };
@@ -125,6 +139,9 @@ export class OnlineRoomService {
       if (!seat) {
         throw new OnlineRoomError("没有在这个房间里找到你的玩家席位。");
       }
+      if (seat.controller === "ai") {
+        throw new OnlineRoomError("AI 玩家阵营由系统管理。");
+      }
 
       if (input.factionId) {
         const faction = PLAYER_FACTIONS.find((entry) => entry.id === input.factionId);
@@ -179,16 +196,18 @@ export class OnlineRoomService {
       }
 
       const timestamp = this.now();
-      const gameState = createGame(
+      const createdGameState = createGame(
         room.seats.map((seat) => ({
           name: seat.name,
           color: seat.color,
-          factionId: seat.factionId
+          factionId: seat.factionId,
+          controller: seat.controller ?? "human"
         })),
         `online-${room.roomCode}-${room.createdAt}`,
         false,
         room.fogEnabled
       );
+      const gameState = runAiUntilHuman(createdGameState).state;
       const nextRoom: StoredOnlineRoom = {
         ...room,
         status: gameState.phase === "victory" ? "finished" : "active",
@@ -222,12 +241,13 @@ export class OnlineRoomService {
       }
 
       const nextState = applyCommand(room.gameState, input.command);
+      const aiResult = runAiUntilHuman(nextState);
       const nextRoom: StoredOnlineRoom = {
         ...room,
-        status: nextState.phase === "victory" ? "finished" : "active",
+        status: aiResult.state.phase === "victory" ? "finished" : "active",
         updatedAt: this.now(),
-        gameState: nextState,
-        lastCommand: input.command
+        gameState: aiResult.state,
+        lastCommand: aiResult.lastCommand ?? input.command
       };
       await transaction.saveRoom(nextRoom);
       return nextRoom;
@@ -352,7 +372,7 @@ export class OnlineRoomService {
 
       const nextSeats = room.seats.filter((seat) => seat.playerId !== input.playerId);
       if (nextSeats.length === room.seats.length) return room;
-      if (nextSeats.length === 0) {
+      if (nextSeats.length === 0 || nextSeats.every((seat) => seat.controller === "ai")) {
         await transaction.deleteRoom();
         return undefined;
       }
@@ -360,7 +380,10 @@ export class OnlineRoomService {
       const timestamp = this.now();
       const nextRoom: StoredOnlineRoom = {
         ...room,
-        hostPlayerId: room.hostPlayerId === input.playerId ? nextSeats[0].playerId : room.hostPlayerId,
+        hostPlayerId:
+          room.hostPlayerId === input.playerId
+            ? nextSeats.find((seat) => seat.controller !== "ai")?.playerId ?? nextSeats[0].playerId
+            : room.hostPlayerId,
         updatedAt: timestamp,
         seats: nextSeats,
         chatMessages: this.appendChatMessage(
@@ -394,7 +417,8 @@ export class OnlineRoomService {
   private createSeat(
     joinIndex: number,
     input: { name: string },
-    timestamp: number
+    timestamp: number,
+    options: { controller?: StoredRoomSeat["controller"]; factionId?: string } = {}
   ): StoredRoomSeat {
     const name = normalizePlayerName(input.name);
     if (!name) {
@@ -404,10 +428,11 @@ export class OnlineRoomService {
     return {
       playerId: `p${joinIndex}`,
       name,
-      color: resolveSeatColor(undefined),
-      factionId: undefined,
+      color: resolveSeatColor(options.factionId),
+      factionId: options.factionId,
+      controller: options.controller ?? "human",
       sessionToken: crypto.randomUUID(),
-      connected: true,
+      connected: options.controller !== "ai",
       joinedAt: timestamp,
       lastSeenAt: timestamp
     };
@@ -487,6 +512,12 @@ function assertTargetPlayerCount(targetPlayerCount: number) {
   }
 }
 
+function assertAiPlayerCount(aiPlayerCount: number, targetPlayerCount: number) {
+  if (!Number.isInteger(aiPlayerCount) || aiPlayerCount < 0 || aiPlayerCount >= targetPlayerCount) {
+    throw new OnlineRoomError("在线房间至少需要保留 1 名人类玩家席位。");
+  }
+}
+
 function nextSeatIndex(seats: StoredRoomSeat[]) {
   return seats.reduce((max, seat) => {
     const match = /^p(\d+)$/.exec(seat.playerId);
@@ -505,7 +536,10 @@ function normalizeChatMessage(text: string) {
 function findDisconnectedSeatByName(seats: StoredRoomSeat[], name: string) {
   const normalizedName = name.toLocaleLowerCase();
   const matches = seats.filter(
-    (seat) => !seat.connected && normalizePlayerName(seat.name).toLocaleLowerCase() === normalizedName
+    (seat) =>
+      seat.controller !== "ai" &&
+      !seat.connected &&
+      normalizePlayerName(seat.name).toLocaleLowerCase() === normalizedName
   );
   return matches.length === 1 ? matches[0] : undefined;
 }

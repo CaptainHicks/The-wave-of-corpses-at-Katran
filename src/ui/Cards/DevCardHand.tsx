@@ -39,7 +39,8 @@ interface HoverAnchor {
 type TouchCardZone = HoverAnchor;
 
 interface TouchExploreState {
-  pointerId: number;
+  pointerId?: number;
+  touchIdentifier?: number;
   cardId?: string;
   mode: "explore" | "pull";
   startX: number;
@@ -223,14 +224,16 @@ export function DevCardHand({
     const handlePointerCancel = (event: PointerEvent) => {
       const activeTouch = activeTouchRef.current;
       if (!activeTouch || event.pointerId !== activeTouch.pointerId) return;
+      activeTouch.pointerId = undefined;
+      if (activeTouch.touchIdentifier !== undefined) return;
       clearTouchSession();
       retractNow();
     };
 
     const handleTouchMove = (event: TouchEvent) => {
       const activeTouch = activeTouchRef.current;
-      if (!activeTouch || activeTouch.pointerId < TOUCH_POINTER_ID_OFFSET) return;
-      const touch = findChangedTouch(event.touches, activeTouch.pointerId - TOUCH_POINTER_ID_OFFSET);
+      if (!activeTouch || activeTouch.touchIdentifier === undefined) return;
+      const touch = findChangedTouch(event.touches, activeTouch.touchIdentifier);
       if (!touch) return;
       event.preventDefault();
       updateTouchSession(touch.clientX, touch.clientY);
@@ -238,8 +241,8 @@ export function DevCardHand({
 
     const handleTouchEnd = (event: TouchEvent) => {
       const activeTouch = activeTouchRef.current;
-      if (!activeTouch || activeTouch.pointerId < TOUCH_POINTER_ID_OFFSET) return;
-      const touch = findChangedTouch(event.changedTouches, activeTouch.pointerId - TOUCH_POINTER_ID_OFFSET);
+      if (!activeTouch || activeTouch.touchIdentifier === undefined) return;
+      const touch = findChangedTouch(event.changedTouches, activeTouch.touchIdentifier);
       if (!touch) return;
       event.preventDefault();
       finishTouchSession(touch.clientX, touch.clientY);
@@ -247,7 +250,7 @@ export function DevCardHand({
 
     const handleTouchCancel = () => {
       const activeTouch = activeTouchRef.current;
-      if (!activeTouch || activeTouch.pointerId < TOUCH_POINTER_ID_OFFSET) return;
+      if (!activeTouch || activeTouch.touchIdentifier === undefined) return;
       clearTouchSession();
       retractNow();
     };
@@ -518,10 +521,26 @@ export function DevCardHand({
   };
 
   const beginTouchExplore = (cardId: string, pointerId: number, clientX: number, clientY: number) => {
+    const isTouchEvent = pointerId >= TOUCH_POINTER_ID_OFFSET;
+    const activeTouch = activeTouchRef.current;
+    if (
+      activeTouch &&
+      activeTouch.cardId === cardId &&
+      activeTouch.mode === "explore"
+    ) {
+      if (isTouchEvent) {
+        activeTouch.touchIdentifier = pointerId - TOUCH_POINTER_ID_OFFSET;
+      } else {
+        activeTouch.pointerId = pointerId;
+      }
+      return;
+    }
+
     captureTouchCardZones();
     lastPointerRef.current = { x: clientX, y: clientY };
     activeTouchRef.current = {
-      pointerId,
+      pointerId: isTouchEvent ? undefined : pointerId,
+      touchIdentifier: isTouchEvent ? pointerId - TOUCH_POINTER_ID_OFFSET : undefined,
       cardId,
       mode: "explore",
       startX: clientX,

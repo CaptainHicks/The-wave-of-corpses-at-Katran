@@ -7,6 +7,7 @@ export interface StoredRoomSeat {
   name: string;
   color: string;
   factionId?: string;
+  controller?: "human" | "ai";
   sessionToken: string;
   connected: boolean;
   joinedAt: number;

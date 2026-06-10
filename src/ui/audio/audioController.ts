@@ -92,7 +92,7 @@ class AudioController {
   }
 
   unlock(): void {
-    if (!this.enabled) return;
+    if (!this.enabled || this.unlocked) return;
     this.unlocked = true;
     this.resumeSfxContext();
     this.scheduleSfxWarmup();

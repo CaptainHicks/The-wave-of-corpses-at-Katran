@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import type { BuildingType, RouteType } from "../../domain/types";
 
 const FALLBACK_PIECE_COLOR = "#f2c14e";
 
@@ -22,6 +23,10 @@ function rgbaFromColor(color: string | undefined, alpha: number) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+function safeFilterIdPart(value: string) {
+  return value.replace(/[^a-zA-Z0-9_-]/g, "-");
+}
+
 export function routePieceColorStyle(color?: string, baseStyle: CSSProperties = {}) {
   const pieceColor = color ?? FALLBACK_PIECE_COLOR;
   return {
@@ -34,6 +39,10 @@ export function routePieceColorStyle(color?: string, baseStyle: CSSProperties = 
   } as CSSProperties;
 }
 
+export function routePieceFilterId(playerId: string, routeType: RouteType) {
+  return `route-vivid-${safeFilterIdPart(playerId)}-${routeType}`;
+}
+
 export function buildingPieceColorStyle(color?: string, baseStyle: CSSProperties = {}) {
   const pieceColor = color ?? FALLBACK_PIECE_COLOR;
   return {
@@ -43,4 +52,8 @@ export function buildingPieceColorStyle(color?: string, baseStyle: CSSProperties
     "--piece-glow": rgbaFromColor(pieceColor, 0.44),
     "--piece-glow-fortress": rgbaFromColor(pieceColor, 0.48)
   } as CSSProperties;
+}
+
+export function buildingPieceFilterId(playerId: string, buildingType: BuildingType) {
+  return `building-vivid-${safeFilterIdPart(playerId)}-${buildingType}`;
 }

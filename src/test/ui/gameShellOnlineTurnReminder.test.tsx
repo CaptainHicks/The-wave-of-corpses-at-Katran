@@ -110,6 +110,30 @@ describe("GameShell online turn reminder", () => {
     expect(screen.queryByText("轮到你了")).not.toBeInTheDocument();
   });
 
+  it("shows the same turn reminder for a single-human local game", () => {
+    render(
+      <GameShell
+        state={createState()}
+        privacy={false}
+        seatPlayerName="赤锈营地"
+        viewerPlayerId="p1"
+        interactionMode="hot-seat"
+        turnReminderEnabled
+        tool="none"
+        animationEvents={[]}
+        animationBusy={false}
+        onClosePrivacy={vi.fn()}
+        onDismissError={vi.fn()}
+        onClear={vi.fn()}
+        submit={vi.fn()}
+        setTool={vi.fn()}
+        setSelection={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("轮到你了")).toBeInTheDocument();
+  });
+
   it("shows again when the online active player changes to this viewer on a later turn", () => {
     const state = createState();
     const { rerender } = renderGameShell({ state, viewerPlayerId: "p2", interactionMode: "online" });
