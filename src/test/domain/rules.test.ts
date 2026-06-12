@@ -910,7 +910,7 @@ describe("setup and production", () => {
     expect(state.players[2].resources.food).toBe(1);
   });
 
-  it("skips players who cannot fulfill a public trade request", () => {
+  it("prompts every targeted player on a public trade regardless of their resources", () => {
     let state = setupGame();
     state.phase = "action";
     state.currentPlayerId = "p1";
@@ -936,13 +936,19 @@ describe("setup and production", () => {
       request: { wood: 1, ammo: 1 }
     });
 
+    // p2 不能满足请求,但仍然先轮到 p2 回应,避免被跳过而泄露其没有弹药。
     expect(state.pending?.kind).toBe("confirmTrade");
     if (state.pending?.kind !== "confirmTrade") throw new Error("Expected a pending player trade.");
+    expect(state.pending?.playerId).toBe("p2");
+    expect(state.pending?.candidateTargetIds).toEqual(["p2", "p3"]);
+
+    // p2 拒绝(无法满足)后,继续轮到 p3 回应。
+    state = applyCommand(state, { type: "confirmPlayerTrade", accept: false });
+    expect(state.pending?.kind).toBe("confirmTrade");
     expect(state.pending?.playerId).toBe("p3");
-    expect(state.pending?.candidateTargetIds).toEqual(["p3"]);
   });
 
-  it("ends a public trade immediately when no other player can fulfill the request", () => {
+  it("ends a public trade only after every player has been prompted and declined", () => {
     let state = setupGame();
     state.phase = "action";
     state.currentPlayerId = "p1";
@@ -968,11 +974,19 @@ describe("setup and production", () => {
       request: { wood: 1, ammo: 1 }
     });
 
+    // 没有人能满足请求,但每个被报价的玩家仍要逐一回应。
+    expect(state.pending?.kind).toBe("confirmTrade");
+    expect(state.pending?.playerId).toBe("p2");
+
+    state = applyCommand(state, { type: "confirmPlayerTrade", accept: false });
+    expect(state.pending?.kind).toBe("confirmTrade");
+    expect(state.pending?.playerId).toBe("p3");
+
+    state = applyCommand(state, { type: "confirmPlayerTrade", accept: false });
     expect(state.pending).toBeUndefined();
-    expect(state.log[0].message).toContain("没有可回应的玩家");
   });
 
-  it("automatically rejects a direct trade when the target cannot fulfill the request", () => {
+  it("prompts a direct trade target even when they cannot fulfill the request", () => {
     let state = setupGame();
     state.phase = "action";
     state.currentPlayerId = "p1";
@@ -994,8 +1008,12 @@ describe("setup and production", () => {
       request: { wood: 1, ammo: 1 }
     });
 
+    // 定向交易不再自动拒绝,而是交由 p2 自己回应,避免泄露其资源情况。
+    expect(state.pending?.kind).toBe("confirmTrade");
+    expect(state.pending?.playerId).toBe("p2");
+
+    state = applyCommand(state, { type: "confirmPlayerTrade", accept: false });
     expect(state.pending).toBeUndefined();
-    expect(state.log[0].message).toContain("自动拒绝");
   });
 
   it("shows only own buildings with militia capacity as recruit targets", () => {

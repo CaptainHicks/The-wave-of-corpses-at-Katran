@@ -22,7 +22,8 @@ import {
   legalWatchtowerVertices,
   longestSupplyLength,
   resourceTotal,
-  subtractResources
+  subtractResources,
+  tradeOfferSignature
 } from "./rules";
 import type { AiStrategyKind, AiStrategyPlan, Command, GameState, PlayerState, Resource, Resources } from "./types";
 
@@ -43,6 +44,7 @@ const ACTION_THRESHOLD = 4;
 const STRATEGY_COMMITMENT_ROUNDS = 2;
 const STRATEGY_SWITCH_MARGIN = 70;
 const STRATEGY_COMMITTED_SWITCH_MARGIN = 155;
+const MAX_TRADE_OFFERS_PER_TURN = 2;
 
 interface Candidate {
   command: Command;
@@ -88,6 +90,16 @@ export function runAiUntilHuman(state: GameState, limit = 500): { state: GameSta
     lastCommand = command;
   }
   return { state: nextState, lastCommand };
+}
+
+// 只推进当前 AI 的一个决策,供 UI 逐步播放动画(掷骰轮盘、建造等)使用,
+// 避免把整个 AI 回合一次性算完后直接闪到下一个玩家。
+export function stepAiOnce(state: GameState): { state: GameState; command?: Command } {
+  if (!isAiPlayer(activeDecisionPlayer(state))) return { state };
+  const refreshed = refreshActiveAiStrategy(state);
+  const command = chooseAiCommand(refreshed);
+  if (!command) return { state: refreshed };
+  return { state: applyCommand(refreshed, command), command };
 }
 
 export function refreshActiveAiStrategy(state: GameState): GameState {
@@ -266,6 +278,7 @@ function actionCandidates(state: GameState, player: PlayerState): Candidate[] {
   });
 
   candidates.push(...bankTradeCandidates(state, player));
+  candidates.push(...playerTradeCandidates(state, player));
   return candidates;
 }
 
@@ -353,6 +366,117 @@ function bankTradeCandidates(state: GameState, player: PlayerState): Candidate[]
     });
   });
   return candidates;
+}
+
+// AI 主动向其他玩家(含人类)提议换资源:用自己冗余的资源换取战略计划所缺的资源。
+// 只生成"对手有理由接受"的报价,并按预计成交概率给候选打分。
+function playerTradeCandidates(state: GameState, player: PlayerState): Candidate[] {
+  const opponents = state.players.filter((item) => item.id !== player.id);
+  if (opponents.length === 0) return [];
+  const alreadyOffered = player.tradeOffersThisTurn ?? [];
+  if (alreadyOffered.length >= MAX_TRADE_OFFERS_PER_TURN) return [];
+
+  const needed = neededResources(state, player);
+  const surplus = surplusResources(state, player);
+  if (needed.length === 0 || surplus.length === 0) return [];
+
+  const baseValue = evaluateState(state, player.id);
+  const basePosition = resourcePositionValue(state, player);
+  const candidates: Candidate[] = [];
+
+  needed.forEach((receive) => {
+    surplus.forEach((give) => {
+      if (give === receive) return;
+      // 1:1 更划算,2:1 更容易被接受;两种都生成,交由打分权衡。
+      ([1, 2] as const).forEach((giveAmount) => {
+        if (player.resources[give] < giveAmount) return;
+        const offer = { [give]: giveAmount } as Partial<Resources>;
+        const request = { [receive]: 1 } as Partial<Resources>;
+        if (alreadyOffered.includes(tradeOfferSignature(undefined, offer, request))) return;
+
+        // playerTrade 只会先生成待确认状态,资源不会立即变动,evaluateState 几乎无差异;
+        // 因此按"交易达成后"的假想状态评估完整收益,并比照银行交易的加成结构补偿待确认带来的折损。
+        const settled = simulateCompletedTrade(state, player.id, offer, request);
+        if (!settled) return;
+        const settledPlayer = playerById(settled, player.id);
+        const evalImprovement = evaluateState(settled, player.id) - baseValue;
+        const positionImprovement = resourcePositionValue(settled, settledPlayer) - basePosition;
+        if (evalImprovement <= 0) return;
+
+        // 估计成交概率:任何对手愿意接受即可成交;偏向不显著资敌领先者。
+        const willingOpponents = opponents.filter((opponent) =>
+          opponent.controller === "ai"
+            ? wouldAcceptTrade(state, opponent, player.id, offer, request)
+            : hasResources(opponent.resources, request)
+        );
+        if (willingOpponents.length === 0) return;
+        const aiWilling = willingOpponents.some((opponent) => opponent.controller === "ai");
+        // AI 对手会接受 => 高把握;只有人类"有资源"=> 中性把握(人类可能拒绝)。
+        const dealConfidence = aiWilling ? 0.92 : 0.55;
+        // 给出 2 个资源换 1 个会略微削弱手牌厚度,轻微惩罚。
+        const thicknessPenalty = (giveAmount - 1) * 18;
+
+        candidates.push({
+          command: { type: "playerTrade", offer, request },
+          bonus: (evalImprovement + positionImprovement * 0.55) * dealConfidence - thicknessPenalty,
+          strategies: [player.aiStrategy?.kind ?? "expansion"]
+        });
+      });
+    });
+  });
+
+  return candidates;
+}
+
+// 构造"交易达成"后的假想状态:回应方按 offer/request 换给当前玩家,
+// 用于评估玩家交易对自身的完整收益(不修改真实状态)。
+function simulateCompletedTrade(
+  state: GameState,
+  playerId: string,
+  offer: Partial<Resources>,
+  request: Partial<Resources>
+): GameState | undefined {
+  const responder = state.players.find(
+    (item) => item.id !== playerId && hasResources(item.resources, request)
+  );
+  if (!responder) return undefined;
+  const next = structuredClone(state);
+  const actor = playerById(next, playerId);
+  const counterparty = playerById(next, responder.id);
+  actor.resources = addResources(subtractResources(actor.resources, offer), request);
+  counterparty.resources = addResources(subtractResources(counterparty.resources, request), offer);
+  return next;
+}
+
+// 战略计划当前最缺、且自己持有为 0 或不足的资源(按需求强度排序,取前若干种)。
+function neededResources(state: GameState, player: PlayerState): Resource[] {
+  const plans = strategicResourcePlans(state, player).sort((a, b) => b.priority - a.priority);
+  const topPlans = plans.slice(0, 2);
+  const deficit = new Map<Resource, number>();
+  topPlans.forEach((plan) => {
+    RESOURCES.forEach((resource) => {
+      const required = plan.cost[resource] ?? 0;
+      const missing = Math.max(0, required - player.resources[resource]);
+      if (missing > 0) deficit.set(resource, (deficit.get(resource) ?? 0) + missing * plan.priority);
+    });
+  });
+  return [...deficit.entries()].sort((a, b) => b[1] - a[1]).map(([resource]) => resource);
+}
+
+// 对当前战略计划没有用处、且持有量较多的冗余资源。
+function surplusResources(state: GameState, player: PlayerState): Resource[] {
+  const plans = strategicResourcePlans(state, player);
+  const requiredFor = new Map<Resource, number>();
+  plans.forEach((plan) => {
+    RESOURCES.forEach((resource) => {
+      const required = plan.cost[resource] ?? 0;
+      if (required > 0) requiredFor.set(resource, Math.max(requiredFor.get(resource) ?? 0, required));
+    });
+  });
+  return RESOURCES.filter((resource) => {
+    const keep = requiredFor.get(resource) ?? 0;
+    return player.resources[resource] > keep;
+  }).sort((a, b) => player.resources[b] - player.resources[a]);
 }
 
 function chooseBestCommand(
@@ -628,12 +752,25 @@ function chooseDiscard(state: GameState, player: PlayerState, amount: number): R
 
 function shouldAcceptTrade(state: GameState, player: PlayerState): boolean {
   const pending = state.pending;
-  if (pending?.kind !== "confirmTrade" || !hasResources(player.resources, pending.request)) return false;
-  const nextResources = addResources(subtractResources(player.resources, pending.request), pending.offer);
-  const before = resourcePositionValue(state, player) + resourceTotal(player.resources) * 3;
-  const afterPlayer = { ...player, resources: nextResources };
+  if (pending?.kind !== "confirmTrade") return false;
+  return wouldAcceptTrade(state, player, pending.actorId, pending.offer, pending.request);
+}
+
+// 从回应方角度评估一笔交易是否值得接受:收到 offer、付出 request。
+// 同时被 AI 用来预判对手会不会接受自己将要提出的交易。
+function wouldAcceptTrade(
+  state: GameState,
+  responder: PlayerState,
+  actorId: string,
+  offer: Partial<Resources>,
+  request: Partial<Resources>
+): boolean {
+  if (!hasResources(responder.resources, request)) return false;
+  const nextResources = addResources(subtractResources(responder.resources, request), offer);
+  const before = resourcePositionValue(state, responder) + resourceTotal(responder.resources) * 3;
+  const afterPlayer = { ...responder, resources: nextResources };
   const after = resourcePositionValue(state, afterPlayer) + resourceTotal(nextResources) * 3;
-  const actorThreat = calculateScore(state, pending.actorId).total - calculateScore(state, player.id).total;
+  const actorThreat = calculateScore(state, actorId).total - calculateScore(state, responder.id).total;
   return after >= before + Math.max(4, actorThreat * 8);
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { activeDecisionPlayer, isAiPlayer, runAiUntilHuman } from "./domain/ai";
+import { activeDecisionPlayer, isAiPlayer, stepAiOnce } from "./domain/ai";
 import { applyCommand, serializeStateForText, RuleError } from "./domain/rules";
 import type { Command, GameState } from "./domain/types";
 import { buildOnlineViewRevision, materializeOnlineGameState } from "./online/clientState";
@@ -19,6 +19,11 @@ interface AppModel {
   state?: GameState;
   error?: string;
 }
+
+// 本地 AI 每一步之间的停顿,让对应动画播放完再走下一步。
+const AI_STEP_DELAY_MS = 720;
+// 掷骰之后额外停留的时间,确保轮盘动画(约 1.8s)播完再继续。
+const AI_DICE_ANIM_LINGER_MS = 2000;
 
 type AppAction =
   | { type: "command"; command: Command }
@@ -58,6 +63,7 @@ function App() {
   const previousOnlineStateRef = useRef<GameState>();
   const lastAnimatedOnlineViewRef = useRef<string>();
   const lastCommandRef = useRef<Command>();
+  const lastAiStepTypeRef = useRef<Command["type"]>();
   const { events: animationEvents, pushEvents, isAnimating } = useGameAnimations();
   const [tool, setTool] = useState<UiTool>("none");
   const [selection, setSelection] = useState<UiSelection>();
@@ -243,10 +249,10 @@ function App() {
     clearRuleHint();
     try {
       const nextState = applyCommand(localState, command);
-      const settledState = runAiUntilHuman(nextState).state;
       previousStateRef.current = localState;
       lastCommandRef.current = command;
-      dispatch({ type: "import", state: settledState });
+      lastAiStepTypeRef.current = command.type;
+      dispatch({ type: "import", state: nextState });
       dispatch({ type: "error", message: undefined });
       setSelection(undefined);
       setOperationContext(undefined);
@@ -267,16 +273,21 @@ function App() {
   useEffect(() => {
     if (!localState || !isAiPlayer(activeDecisionPlayer(localState))) return;
     setPrivacy(false);
+    // 逐步推进 AI:每次只走一步,留出时间播放该步的动画(尤其是掷骰轮盘),
+    // 而不是一次性算完整个 AI 回合后直接闪到下一个玩家。
+    const justRolledDice = lastAiStepTypeRef.current === "rollDice";
+    const stepDelay = justRolledDice ? AI_DICE_ANIM_LINGER_MS : AI_STEP_DELAY_MS;
     const timer = window.setTimeout(() => {
-      const result = runAiUntilHuman(localState);
-      if (result.state === localState) return;
-      previousStateRef.current = undefined;
-      lastCommandRef.current = undefined;
+      const result = stepAiOnce(localState);
+      if (!result.command || result.state === localState) return;
+      previousStateRef.current = localState;
+      lastCommandRef.current = result.command;
+      lastAiStepTypeRef.current = result.command.type;
       dispatch({ type: "import", state: result.state });
       dispatch({ type: "error", message: undefined });
       setSelection(undefined);
       setOperationContext(undefined);
-    }, 0);
+    }, stepDelay);
     return () => window.clearTimeout(timer);
   }, [localState]);
 

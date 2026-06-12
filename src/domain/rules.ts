@@ -217,6 +217,7 @@ function emptyPlayer(
     militia: [],
     defenderTokens: 0,
     movedConvoyThisTurn: false,
+    tradeOffersThisTurn: [],
     pieces: { ...PIECE_LIMITS },
     usedDevCardThisTurn: false
   };
@@ -453,6 +454,7 @@ function startPreparePhase(state: GameState): void {
   const player = currentPlayer(state);
   player.usedDevCardThisTurn = false;
   player.movedConvoyThisTurn = false;
+  player.tradeOffersThisTurn = [];
   player.militia.forEach((militia) => {
     if (militia.status === "readying") militia.status = "active";
   });
@@ -842,16 +844,9 @@ function playerTrade(
   assertRule(resourceTotal(offer) > 0 && resourceTotal(request) > 0, "玩家交易双方都必须提供资源。");
   assertRule(hasNonNegativeResourceAmounts(offer) && hasNonNegativeResourceAmounts(request), "交易资源数量不能为负。");
   assertRule(hasResources(actor.resources, offer), "当前玩家资源不足。");
-  const candidateTargetIds = targetIds.filter((id) => hasResources(findPlayer(state, id).resources, request));
-  if (candidateTargetIds.length === 0) {
-    if (targetPlayerId) {
-      const target = findPlayer(state, targetPlayerId);
-      event(state, `${target.name} 没有所需资源，自动拒绝了 ${actor.name} 的资源交易。`);
-    } else {
-      event(state, `${actor.name} 的公开报价没有可回应的玩家，报价结束。`);
-    }
-    return;
-  }
+  // 所有被报价的玩家都需要逐一回应，不再因资源不足而被跳过，
+  // 否则其他玩家可以通过“是否被跳过”推断该玩家手里有没有某种资源。
+  const candidateTargetIds = targetIds;
   const firstTarget = findPlayer(state, candidateTargetIds[0]);
   state.pending = {
     kind: "confirmTrade",
@@ -864,7 +859,19 @@ function playerTrade(
     request
   };
   const targetLabel = targetPlayerId ? firstTarget.name : "所有其他玩家";
+  actor.tradeOffersThisTurn = [...(actor.tradeOffersThisTurn ?? []), tradeOfferSignature(targetPlayerId, offer, request)];
   event(state, `${actor.name} 向 ${targetLabel} 提出资源交易，等待确认。`);
+}
+
+/** 用于在同一回合内识别并去重相同的交易报价(目标 + 给出 + 换取)。 */
+export function tradeOfferSignature(
+  targetPlayerId: string | undefined,
+  offer: Partial<Resources>,
+  request: Partial<Resources>
+): string {
+  const normalize = (bundle: Partial<Resources>) =>
+    RESOURCES.map((resource) => `${resource}:${bundle[resource] ?? 0}`).join(",");
+  return `${targetPlayerId ?? "*"}|${normalize(offer)}|${normalize(request)}`;
 }
 
 function confirmPlayerTrade(state: GameState, accept: boolean): void {
@@ -877,7 +884,7 @@ function confirmPlayerTrade(state: GameState, accept: boolean): void {
   const request = pending.request;
   if (!accept) {
     const remainingTargetIds = (pending.candidateTargetIds ?? [target.id]).filter(
-      (id) => id !== target.id && hasResources(findPlayer(state, id).resources, request)
+      (id) => id !== target.id
     );
     const declinedTargetIds = [...(pending.declinedTargetIds ?? []), target.id];
     if (remainingTargetIds.length > 0) {

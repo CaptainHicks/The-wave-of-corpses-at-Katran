@@ -156,6 +156,88 @@ describe("local AI player", () => {
     expect(state.players[0].aiStrategy?.reviewedTurn).toBe(state.turn);
   });
 
+  it("proactively offers a player trade when an opponent is willing to swap the needed resource", () => {
+    const state = createAiActionGame();
+    // p1 缺金属(防御计划),弹药富余;p2 是 AI,金属富余、缺弹药,会愿意接受。
+    state.players[0].pieces.camps = 0; // 关掉扩张,聚焦防御计划需要金属。
+    state.players[0].resources = createResources({ food: 2, ammo: 4 });
+    state.players[0].aiStrategy = {
+      kind: "fortification",
+      chosenTurn: state.turn,
+      reviewedTurn: state.turn,
+      commitmentUntilTurn: state.turn + 20,
+      progress: 0,
+      lastProgressTurn: state.turn
+    };
+    state.players[1].resources = createResources({ metal: 5 });
+    state.players[2].resources = createResources({ wood: 5 });
+
+    const command = chooseAiCommand(state);
+
+    expect(command?.type).toBe("playerTrade");
+    if (command?.type !== "playerTrade") return;
+    expect(command.request).toMatchObject({ metal: 1 });
+    expect((command.offer as Record<string, number>).ammo ?? 0).toBeGreaterThan(0);
+
+    // 提议应被记录,避免本回合反复提出同一笔交易。
+    const next = applyCommand(state, command);
+    expect(next.players[0].tradeOffersThisTurn?.length).toBe(1);
+    expect(chooseAiCommand(next)?.type).not.toBe("playerTrade");
+  });
+
+  it("does not propose a player trade no opponent could fulfill", () => {
+    const state = createAiActionGame();
+    state.players[0].pieces.camps = 0;
+    state.players[0].resources = createResources({ food: 2, ammo: 4 });
+    state.players[0].aiStrategy = {
+      kind: "fortification",
+      chosenTurn: state.turn,
+      reviewedTurn: state.turn,
+      commitmentUntilTurn: state.turn + 20,
+      progress: 0,
+      lastProgressTurn: state.turn
+    };
+    // 没有任何对手持有金属。
+    state.players[1].resources = createResources({ wood: 5 });
+    state.players[2].resources = createResources({ wood: 5 });
+
+    expect(chooseAiCommand(state)?.type).not.toBe("playerTrade");
+  });
+
+  it("resolves a proposed trade between two AI players and moves the resources", () => {
+    const state = createAiActionGame();
+    state.players[0].pieces.camps = 0;
+    state.players[0].resources = createResources({ food: 2, ammo: 4 });
+    state.players[0].aiStrategy = {
+      kind: "fortification",
+      chosenTurn: state.turn,
+      reviewedTurn: state.turn,
+      commitmentUntilTurn: state.turn + 20,
+      progress: 0,
+      lastProgressTurn: state.turn
+    };
+    state.players[1].resources = createResources({ metal: 5 });
+    state.players[2].resources = createResources({ wood: 5 });
+
+    const offer = chooseAiCommand(state);
+    expect(offer?.type).toBe("playerTrade");
+    let next = applyCommand(state, offer!);
+    expect(next.pending?.kind).toBe("confirmTrade");
+
+    // 被报价的 AI 应自行回应,最终促成交易并真正转移资源。
+    const ammoBefore = state.players[0].resources.ammo;
+    const metalBefore = state.players[0].resources.metal;
+    for (let step = 0; step < 4 && next.pending?.kind === "confirmTrade"; step += 1) {
+      const response = chooseAiCommand(next);
+      expect(response?.type).toBe("confirmPlayerTrade");
+      next = applyCommand(next, response!);
+    }
+    expect(next.pending?.kind).not.toBe("confirmTrade");
+    const actor = next.players.find((player) => player.id === "p1")!;
+    expect(actor.resources.metal).toBe(metalBefore + 1);
+    expect(actor.resources.ammo).toBeLessThan(ammoBefore);
+  });
+
   it("changes strategy when the committed plan becomes impossible", () => {
     let state = createAiActionGame();
     state.players[0].pieces.camps = 0;

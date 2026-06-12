@@ -128,6 +128,8 @@ export interface PlayerState {
   militia: Militia[];
   defenderTokens: number;
   movedConvoyThisTurn: boolean;
+  /** 本回合内已经发起过的玩家交易报价签名,用于防止 AI 反复提出同一笔交易。 */
+  tradeOffersThisTurn?: string[];
   pieces: {
     camps: number;
     fortresses: number;
