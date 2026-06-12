@@ -69,6 +69,7 @@ function App() {
   const [selection, setSelection] = useState<UiSelection>();
   const [operationContext, setOperationContext] = useState<UiOperationContext>();
   const [privacy, setPrivacy] = useState(false);
+  const [systemMenuOpen, setSystemMenuOpen] = useState(false);
   const [lastSeatPlayerId, setLastSeatPlayerId] = useState<string | undefined>();
   const [localViewerPlayerId, setLocalViewerPlayerId] = useState<string | undefined>();
   const ruleHintTimerRef = useRef<number>();
@@ -431,6 +432,8 @@ function App() {
       }}
       onReportError={showRuleHint}
       onClear={clearHandler}
+      systemMenuOpen={systemMenuOpen}
+      onSystemMenuToggle={setSystemMenuOpen}
       onReconnectOnlineRoom={() => {
         void onlineSession.resumeSavedSession();
       }}

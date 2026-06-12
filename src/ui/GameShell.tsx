@@ -49,6 +49,8 @@ interface GameShellProps {
   onClear: () => void;
   onReconnectOnlineRoom?: () => void;
   onLeaveOnlineRoom?: () => void;
+  systemMenuOpen?: boolean;
+  onSystemMenuToggle?: (open: boolean) => void;
   submit: (command: Command) => void;
   setTool: (tool: UiTool) => void;
   setSelection: Dispatch<SetStateAction<UiSelection | undefined>>;
@@ -182,6 +184,8 @@ export function GameShell({
   onClear,
   onReconnectOnlineRoom,
   onLeaveOnlineRoom,
+  systemMenuOpen,
+  onSystemMenuToggle,
   submit,
   setTool,
   setSelection,
@@ -214,6 +218,10 @@ export function GameShell({
   const shownOnlineTurnReminderKeysRef = useRef<Set<string>>(new Set());
   const submittedTimeoutKeyRef = useRef<string>();
   const submitRef = useRef(submit);
+  const systemMenuOpenRef = useRef(systemMenuOpen);
+  systemMenuOpenRef.current = systemMenuOpen;
+  const pauseStartRef = useRef<number>(0);
+  const totalPausedMsRef = useRef(0);
   const [stageScale, setStageScale] = useState(getStageScale);
   const mapViewRef = useRef<MapViewState>({
     scale: DEFAULT_MAP_SCALE,
@@ -562,6 +570,15 @@ export function GameShell({
   }, []);
 
   useEffect(() => {
+    if (systemMenuOpen) {
+      pauseStartRef.current = Date.now();
+    } else if (pauseStartRef.current) {
+      totalPausedMsRef.current += Date.now() - pauseStartRef.current;
+      pauseStartRef.current = 0;
+    }
+  }, [systemMenuOpen]);
+
+  useEffect(() => {
     if (mode === "victory") {
       setTurnTimeRemaining(0);
       return;
@@ -570,9 +587,12 @@ export function GameShell({
     const startedAt = Date.now();
     submittedTimeoutKeyRef.current = undefined;
     setTurnTimeRemaining(TURN_TIME_LIMIT_SECONDS);
+    totalPausedMsRef.current = 0;
+    pauseStartRef.current = 0;
 
     const timerId = window.setInterval(() => {
-      const elapsedMs = Date.now() - startedAt;
+      const pausedMs = totalPausedMsRef.current + (systemMenuOpenRef.current ? Date.now() - pauseStartRef.current : 0);
+      const elapsedMs = Date.now() - startedAt - pausedMs;
       const nextRemaining = Math.max(0, Math.ceil((TURN_TIME_LIMIT_SECONDS * 1000 - elapsedMs) / 1000));
       setTurnTimeRemaining(nextRemaining);
 
@@ -691,6 +711,7 @@ export function GameShell({
           onClear={onClear}
           onReconnectOnlineRoom={onReconnectOnlineRoom}
           onLeaveOnlineRoom={onLeaveOnlineRoom}
+          onSystemMenuToggle={onSystemMenuToggle}
         />
 
         <BottomHand

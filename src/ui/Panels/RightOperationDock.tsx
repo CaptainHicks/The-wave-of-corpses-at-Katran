@@ -46,7 +46,8 @@ export function RightOperationDock({
   setOperationContext,
   onClear,
   onReconnectOnlineRoom,
-  onLeaveOnlineRoom
+  onLeaveOnlineRoom,
+  onSystemMenuToggle
 }: {
   state: GameState;
   mode: TurnUiMode;
@@ -69,6 +70,7 @@ export function RightOperationDock({
   onClear: () => void;
   onReconnectOnlineRoom?: () => void;
   onLeaveOnlineRoom?: () => void;
+  onSystemMenuToggle?: (open: boolean) => void;
 }) {
   const [activeTab, setActiveTab] = useState<ActionTab>("trade");
   const [showBuildCost, setShowBuildCost] = useState(false);
@@ -106,6 +108,10 @@ export function RightOperationDock({
       setActiveTab("trade");
     }
   }, [dockContextKey, mode, setOperationContext, setSelection, setTool, state]);
+
+  useEffect(() => {
+    onSystemMenuToggle?.(showSystemMenu);
+  }, [showSystemMenu, onSystemMenuToggle]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
