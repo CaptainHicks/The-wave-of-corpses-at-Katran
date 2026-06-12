@@ -33,6 +33,7 @@ export function RightOperationDock({
   viewerPlayerId,
   pendingPlayerId,
   interactionMode,
+  canInteract,
   onlineRoomCode,
   onlineConnectionState,
   turnTimeRemaining,
@@ -54,6 +55,7 @@ export function RightOperationDock({
   viewerPlayerId: string;
   pendingPlayerId?: string;
   interactionMode: InteractionMode;
+  canInteract: boolean;
   onlineRoomCode?: string;
   onlineConnectionState?: "disconnected" | "connecting" | "connected" | "reconnecting";
   turnTimeRemaining?: number;
@@ -74,7 +76,6 @@ export function RightOperationDock({
   const currentPlayer = state.players.find((player) => player.id === state.currentPlayerId);
   const activePlayerId = pendingPlayerId ?? state.currentPlayerId;
   const waitingPlayer = state.players.find((player) => player.id === activePlayerId) ?? currentPlayer;
-  const canInteract = interactionMode === "hot-seat" || viewerPlayerId === activePlayerId;
   const dockContextKey = [
     state.turn,
     state.currentPlayerId,
@@ -162,7 +163,7 @@ export function RightOperationDock({
           <p className="phase-copy">当前阶段没有常规行动入口。</p>
         </section>
       )}
-      {!canInteract && interactionMode === "online" && mode !== "victory" && (
+      {!canInteract && mode !== "victory" && (
         <section className="panel action-card">
           <h2>等待其他玩家行动</h2>
           <p className="phase-copy">{waitingPlayer?.name ?? "其他玩家"} 正在处理当前回合。</p>
@@ -228,7 +229,7 @@ export function RightOperationDock({
         mode={mode}
         animationBusy={animationBusy}
         commandBusy={commandBusy}
-        interactionLocked={!canInteract && interactionMode === "online" && mode !== "victory"}
+        interactionLocked={!canInteract && mode !== "victory"}
         lockedSubtitle={`${waitingPlayer?.name ?? "其他玩家"} 正在行动`}
         submit={submit}
       />

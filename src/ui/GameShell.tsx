@@ -677,6 +677,7 @@ export function GameShell({
           viewerPlayerId={viewerPlayerId}
           pendingPlayerId={effectivePendingPlayerId}
           interactionMode={interactionMode}
+          canInteract={canInteract}
           onlineRoomCode={onlineRoomCode}
           onlineConnectionState={onlineConnectionState}
           turnTimeRemaining={turnTimeRemaining}
