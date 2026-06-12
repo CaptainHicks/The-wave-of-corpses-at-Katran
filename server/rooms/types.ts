@@ -28,6 +28,7 @@ export interface StoredOnlineRoom {
   hostPlayerId: string;
   status: OnlineRoomStatus;
   fogEnabled: boolean;
+  boardStructureId?: string;
   targetPlayerCount: number;
   createdAt: number;
   updatedAt: number;

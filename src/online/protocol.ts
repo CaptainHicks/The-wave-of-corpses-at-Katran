@@ -11,6 +11,7 @@ export interface RoomMetaSnapshot {
 export interface LobbyRoomMetaSnapshot extends RoomMetaSnapshot {
   targetPlayerCount: number;
   fogEnabled: boolean;
+  boardStructureId?: string;
 }
 
 export interface RoomCreateRequest {
@@ -18,6 +19,7 @@ export interface RoomCreateRequest {
   targetPlayerCount: number;
   aiPlayerCount?: number;
   fogEnabled: boolean;
+  boardStructureId?: string;
 }
 
 export interface RoomJoinRequest {

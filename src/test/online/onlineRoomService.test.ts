@@ -43,7 +43,14 @@ afterEach(async () => {
 describe("OnlineRoomService", () => {
   it("creates AI seats and runs their setup turns on the server before returning control to the host", async () => {
     const service = await createService();
-    const host = await service.createRoom({
+
+    // The board seed derives from the random room code, so the opening roll that
+    // picks the starting player varies per run. When the AI (p2) starts, the host
+    // only regains control after the AI has already taken its first action turn,
+    // which can add routes beyond the two placed during setup. Retry room creation
+    // until the host (p1) wins the opening roll so the setup-only assertions below
+    // stay deterministic.
+    let host = await service.createRoom({
       name: "Host",
       targetPlayerCount: 2,
       aiPlayerCount: 1,
@@ -57,15 +64,31 @@ describe("OnlineRoomService", () => {
       factionId: "blue-steel"
     });
 
-    await service.chooseFaction({
-      roomCode: host.room.roomCode,
-      playerId: host.seat.playerId,
-      factionId: "red-rust"
-    });
-    let room = await service.startRoom({
-      roomCode: host.room.roomCode,
-      viewerPlayerId: host.seat.playerId
-    });
+    let room: Awaited<ReturnType<typeof service.startRoom>> | undefined;
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      await service.chooseFaction({
+        roomCode: host.room.roomCode,
+        playerId: host.seat.playerId,
+        factionId: "red-rust"
+      });
+      const started = await service.startRoom({
+        roomCode: host.room.roomCode,
+        viewerPlayerId: host.seat.playerId
+      });
+      if (started.gameState?.setup.order[0] === host.seat.playerId) {
+        room = started;
+        break;
+      }
+      host = await service.createRoom({
+        name: "Host",
+        targetPlayerCount: 2,
+        aiPlayerCount: 1,
+        fogEnabled: false
+      });
+    }
+
+    expect(room?.gameState?.setup.order[0]).toBe(host.seat.playerId);
+    room = room!;
 
     for (let step = 0; room.gameState?.phase === "setup" && step < 10; step += 1) {
       expect(room.gameState.pending?.playerId ?? room.gameState.currentPlayerId).toBe(host.seat.playerId);
@@ -83,7 +106,7 @@ describe("OnlineRoomService", () => {
     expect(room.gameState?.phase).not.toBe("setup");
     expect(room.gameState?.currentPlayerId).toBe(host.seat.playerId);
     expect(Object.values(room.gameState!.board.vertices).filter((vertex) => vertex.building?.ownerId === "p2")).toHaveLength(2);
-    expect(Object.values(room.gameState!.board.edges).filter((edge) => edge.route?.ownerId === "p2")).toHaveLength(2);
+    expect(Object.values(room.gameState!.board.edges).filter((edge) => edge.route?.ownerId === "p2" && edge.route.type === "transport")).toHaveLength(2);
   });
 
   it("creates a lobby, lets a second player join, and starts the game after everyone chooses a faction", async () => {
@@ -91,7 +114,8 @@ describe("OnlineRoomService", () => {
     const host = await service.createRoom({
       name: "Host",
       targetPlayerCount: 2,
-      fogEnabled: true
+      fogEnabled: true,
+      boardStructureId: "southern-breach"
     });
     const guest = await service.joinRoom({
       roomCode: host.room.roomCode,
@@ -117,6 +141,8 @@ describe("OnlineRoomService", () => {
     expect(host.seat.playerId).toBe("p1");
     expect(guest.seat.playerId).toBe("p2");
     expect(started.status).toBe("active");
+    expect(host.room.boardStructureId).toBe("southern-breach");
+    expect(started.gameState?.board.structureId).toBe("southern-breach");
     expect(started.gameState?.players.map((player) => player.id)).toEqual(["p1", "p2"]);
     expect(started.gameState?.players.map((player) => player.factionId)).toEqual(["red-rust", "blue-steel"]);
     expect(started.gameState?.phase).toBe("setup");

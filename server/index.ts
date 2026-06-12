@@ -346,7 +346,8 @@ async function emitRoomViews(room: StoredOnlineRoom) {
       status: room.status,
       connectedPlayerIds,
       targetPlayerCount: room.targetPlayerCount,
-      fogEnabled: room.fogEnabled
+      fogEnabled: room.fogEnabled,
+      boardStructureId: room.boardStructureId
     } as const;
 
     for (const seat of room.seats.filter((seat) => seat.controller !== "ai")) {

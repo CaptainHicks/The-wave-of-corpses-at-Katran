@@ -21,6 +21,7 @@ import {
   getPlayerVertices,
   hiddenTileIdsAroundRoute,
   isBlackMarketVisible,
+  isBoardStructureId,
   isResourceTile,
   routeTypeAllowedOnEdge,
   tileResource,
@@ -267,10 +268,15 @@ export function createGame(
   players: Array<{ name: string; color: string; factionId?: string; controller?: PlayerState["controller"] }>,
   seed = `wasteland-${Date.now()}`,
   debugMode = false,
-  fogEnabled = true
+  fogEnabled = true,
+  boardStructureId?: string
 ): GameState {
   assertRule(players.length >= 2 && players.length <= 6, "本地热座支持 2 到 6 名玩家。");
-  const board = createStandardBoard(seed, { avoidStructureSignature: lastGameBoardStructureSignature });
+  assertRule(!boardStructureId || isBoardStructureId(boardStructureId), "未知地图。");
+  const board = createStandardBoard(seed, {
+    avoidStructureSignature: lastGameBoardStructureSignature,
+    structureId: boardStructureId
+  });
   lastGameBoardStructureSignature = board.structureSignature;
   if (!fogEnabled) {
     Object.values(board.tiles).forEach((tile) => {
@@ -1664,7 +1670,13 @@ export function legalMerchantTiles(state: GameState): string[] {
 
 export function applyCommand(baseState: GameState | undefined, command: Command): GameState {
   if (command.type === "createGame") {
-    return createGame(command.players, command.seed, command.debugMode ?? false, command.fogEnabled ?? true);
+    return createGame(
+      command.players,
+      command.seed,
+      command.debugMode ?? false,
+      command.fogEnabled ?? true,
+      command.boardStructureId
+    );
   }
   assertRule(baseState, "请先创建游戏。");
   const actingPlayerId = baseState.currentPlayerId;

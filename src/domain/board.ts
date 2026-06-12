@@ -34,9 +34,10 @@ interface BoardCell {
 
 interface CreateStandardBoardOptions {
   avoidStructureSignature?: string;
+  structureId?: string;
 }
 
-const BOARD_STRUCTURES: readonly BoardStructure[] = [
+const BOARD_STRUCTURES = [
   {
     id: "central-large",
     reveal: "large-buffer",
@@ -180,7 +181,27 @@ const BOARD_STRUCTURES: readonly BoardStructure[] = [
       "SSSSOLLLL"
     ]
   }
-] as const;
+] as const satisfies readonly BoardStructure[];
+
+export const BOARD_STRUCTURE_OPTIONS = [
+  { id: "central-large", label: "废土中庭", description: "中央大资源区，外围分散小据点。" },
+  { id: "left-large", label: "西部高地", description: "西侧资源厚重，东侧小据点密集。" },
+  { id: "right-large", label: "东部高地", description: "东侧资源厚重，西侧小据点密集。" },
+  { id: "dual-large", label: "双核盆地", description: "两端大资源区，中线小据点争夺激烈。" },
+  { id: "left-start-split-right-a", label: "裂岸前哨 A", description: "左翼大区稳定，右翼被废土切割。" },
+  { id: "left-start-split-right-b", label: "裂岸前哨 B", description: "同型裂岸布局，保留独立随机资源分配。" },
+  { id: "small-islands", label: "群岛废墟", description: "小据点成片分布，探索节奏更碎。" },
+  { id: "northern-ridge", label: "北方山脊", description: "北部资源连成高地，南侧据点零散。" },
+  { id: "southern-breach", label: "南部缺口", description: "中央大区被南北废土口切开。" },
+  { id: "central-fracture", label: "中央断层", description: "大资源区沿中线断裂，边缘小据点包围。" },
+  { id: "wasteland-ring", label: "废土环带", description: "外围小据点夹住中央资源腹地。" }
+] as const satisfies ReadonlyArray<{ id: (typeof BOARD_STRUCTURES)[number]["id"]; label: string; description: string }>;
+
+const BOARD_STRUCTURE_IDS = new Set<string>(BOARD_STRUCTURES.map((structure) => structure.id));
+
+export function isBoardStructureId(value: string | undefined): value is (typeof BOARD_STRUCTURES)[number]["id"] {
+  return Boolean(value && BOARD_STRUCTURE_IDS.has(value));
+}
 
 const ROLE_SYMBOL_TO_CLUSTER: Record<BoardRoleSymbol, BoardCluster> = {
   L: "large",
@@ -249,10 +270,6 @@ export function isResourceTile(tile: TileState): boolean {
   return tile.hiddenType === "warehouse" || TILE_RESOURCE[tile.hiddenType] !== undefined;
 }
 
-export function isProductiveTile(tile: TileState): boolean {
-  return tile.revealed && isResourceTile(tile) && tile.hiddenType !== "infected" && tile.hiddenType !== "empty";
-}
-
 export function tileResource(tile: TileState): keyof Resources | undefined {
   if (tile.hiddenType === "warehouse") return undefined;
   return TILE_RESOURCE[tile.hiddenType];
@@ -263,10 +280,19 @@ export function createStandardBoard(
   options: CreateStandardBoardOptions = {}
 ): BoardState {
   let rng: RngState = { seed: `board:${seed}`, counter: 1 };
-  const selectableStructures = BOARD_STRUCTURES.filter(
-    (structure) =>
-      BOARD_STRUCTURES.length === 1 || structureSignature(structure) !== options.avoidStructureSignature
-  );
+  const selectedStructure = options.structureId
+    ? BOARD_STRUCTURES.find((structure) => structure.id === options.structureId)
+    : undefined;
+  if (options.structureId && !selectedStructure) {
+    throw new Error(`Unknown board structure: ${options.structureId}`);
+  }
+  const hasSingleStructure = (BOARD_STRUCTURES as readonly BoardStructure[]).length === 1;
+  const selectableStructures = selectedStructure
+    ? [selectedStructure]
+    : BOARD_STRUCTURES.filter(
+        (structure) =>
+          hasSingleStructure || structureSignature(structure) !== options.avoidStructureSignature
+      );
   const [structureIndex, structureRng] = randomInt(rng, selectableStructures.length);
   rng = structureRng;
   const structures = [
@@ -1064,11 +1090,6 @@ export function adjacentTileIds(board: BoardState, tileIdValue: string): string[
 
 export function areTilesAdjacent(board: BoardState, a: string, b: string): boolean {
   return adjacentTileIds(board, a).includes(b);
-}
-
-export function edgeTouchesHiddenTile(board: BoardState, edgeIdValue: string): string | undefined {
-  const edge = board.edges[edgeIdValue];
-  return edge?.tileIds.find((id) => !board.tiles[id].revealed);
 }
 
 export function tileIdsAroundRoute(board: BoardState, edgeIdValue: string): string[] {

@@ -38,8 +38,6 @@ export const PLAYER_FACTIONS = [
   { id: "ash-merchant", name: "灰烬商队", color: "#5b7f86", portrait: "/assets/hud/player-6.v1.webp" }
 ] as const;
 
-export const PLAYER_COLORS = PLAYER_FACTIONS.map((faction) => faction.color);
-
 export const EMPTY_RESOURCES: Resources = {
   food: 0,
   wood: 0,

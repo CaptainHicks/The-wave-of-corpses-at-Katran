@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { PLAYER_FACTIONS } from "../../src/domain/constants";
+import { isBoardStructureId } from "../../src/domain/board";
 import { runAiUntilHuman } from "../../src/domain/ai";
 import { authorizeCommandForPlayer, OnlineAuthorizationError } from "../../src/online/authorization";
 import { applyCommand, createGame } from "../../src/domain/rules";
@@ -34,9 +35,11 @@ export class OnlineRoomService {
     targetPlayerCount: number;
     aiPlayerCount?: number;
     fogEnabled: boolean;
+    boardStructureId?: string;
   }): Promise<{ room: StoredOnlineRoom; seat: StoredRoomSeat }> {
     await this.store.removeExpiredRooms();
     assertTargetPlayerCount(input.targetPlayerCount);
+    assertBoardStructureId(input.boardStructureId);
     const aiPlayerCount = input.aiPlayerCount ?? 0;
     assertAiPlayerCount(aiPlayerCount, input.targetPlayerCount);
 
@@ -55,6 +58,7 @@ export class OnlineRoomService {
       hostPlayerId: seat.playerId,
       status: "lobby",
       fogEnabled: input.fogEnabled,
+      boardStructureId: input.boardStructureId,
       targetPlayerCount: input.targetPlayerCount,
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -205,7 +209,8 @@ export class OnlineRoomService {
         })),
         `online-${room.roomCode}-${room.createdAt}`,
         false,
-        room.fogEnabled
+        room.fogEnabled,
+        room.boardStructureId
       );
       const gameState = runAiUntilHuman(createdGameState).state;
       const nextRoom: StoredOnlineRoom = {
@@ -515,6 +520,12 @@ function assertTargetPlayerCount(targetPlayerCount: number) {
 function assertAiPlayerCount(aiPlayerCount: number, targetPlayerCount: number) {
   if (!Number.isInteger(aiPlayerCount) || aiPlayerCount < 0 || aiPlayerCount >= targetPlayerCount) {
     throw new OnlineRoomError("在线房间至少需要保留 1 名人类玩家席位。");
+  }
+}
+
+function assertBoardStructureId(boardStructureId?: string) {
+  if (boardStructureId && !isBoardStructureId(boardStructureId)) {
+    throw new OnlineRoomError("未知地图。");
   }
 }
 

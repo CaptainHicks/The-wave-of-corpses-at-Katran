@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PLAYER_FACTIONS } from "../../domain/constants";
+import { BOARD_STRUCTURE_OPTIONS } from "../../domain/board";
 import type { LobbyView } from "../../online/protocol";
 import { StartScreen } from "../../ui/StartScreen";
 
@@ -143,7 +144,7 @@ describe("StartScreen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "本地热座" }));
     expect(screen.getByLabelText("玩家人数")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "确认开局" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "开始游戏" })).toBeInTheDocument();
   });
 
   it("renders rules as a handbook layout with section navigation and scrollable content", () => {
@@ -188,7 +189,7 @@ describe("StartScreen", () => {
       Object.defineProperty(section, "offsetTop", { value: index * 220, configurable: true });
     });
 
-    fireEvent.scroll(scrollRegion, { target: { scrollTop: 900 } });
+    fireEvent.scroll(scrollRegion, { target: { scrollTop: 1540 } });
 
     expect(screen.getByRole("link", { name: "尸潮来袭与围城" })).toHaveAttribute("aria-current", "true");
     expect(screen.getByRole("link", { name: "游戏概述" })).not.toHaveAttribute("aria-current");
@@ -315,10 +316,10 @@ describe("StartScreen", () => {
     view = renderStartScreen();
     openHotSeatSetup();
     expect(view.container.querySelector(".start-logo-lockup")).not.toBeInTheDocument();
-    expect(view.container.querySelector(".start-local-title.start-secondary-title")).toBeInTheDocument();
     expect(view.container.querySelector(".start-local-board.start-secondary-frame")).toBeInTheDocument();
     expect(view.container.querySelector(".start-local-board .start-local-start-button")).toBeInTheDocument();
-    expect(screen.getByText("配置真人与 AI 席位，集结幸存者阵营")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "基础设置" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "配置席位" })).toBeInTheDocument();
 
     view.unmount();
     view = renderStartScreen();
@@ -345,7 +346,9 @@ describe("StartScreen", () => {
     view = renderStartScreen();
     openOnlineEntry();
     expect(view.container.querySelector(".start-logo-lockup")).not.toBeInTheDocument();
-    expect(view.container.querySelector(".start-online-entry-title.start-secondary-title")).toBeInTheDocument();
+    const onlineEntryTitle = view.container.querySelector(".start-online-entry-title");
+    expect(onlineEntryTitle).toBeInTheDocument();
+    expect(onlineEntryTitle).toHaveClass("start-secondary-title");
     expect(view.container.querySelector(".start-online-entry-layout.start-secondary-frame")).toBeInTheDocument();
 
     view.unmount();
@@ -355,15 +358,26 @@ describe("StartScreen", () => {
     expect(view.container.querySelector(".start-lobby-layout.start-secondary-frame")).toBeInTheDocument();
   });
 
-  it("shows create and join room forms on the online entry page", () => {
+  it("shows one online room form at a time and switches between create and join", () => {
     renderStartScreen();
     openOnlineEntry();
 
+    expect(screen.getByRole("heading", { name: "联机房间" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "创建房间" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "加入房间" })).toHaveAttribute("aria-selected", "false");
     expect(screen.getByRole("button", { name: "创建在线房间" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "加入在线房间" })).toBeInTheDocument();
     expect(screen.getByLabelText("在线玩家名称")).toBeInTheDocument();
+    expect(screen.queryByLabelText("在线加入玩家名称")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("在线房间码")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "加入房间" }));
+
+    expect(screen.getByRole("tab", { name: "创建房间" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByRole("tab", { name: "加入房间" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("button", { name: "加入在线房间" })).toBeInTheDocument();
     expect(screen.getByLabelText("在线加入玩家名称")).toBeInTheDocument();
     expect(screen.getByLabelText("在线房间码")).toBeInTheDocument();
+    expect(screen.queryByLabelText("在线玩家名称")).not.toBeInTheDocument();
   });
 
   it("creates an online room without selecting a faction first", () => {
@@ -381,9 +395,27 @@ describe("StartScreen", () => {
     });
   });
 
+  it("passes the selected map when creating an online room", () => {
+    const { online } = renderStartScreen();
+    openOnlineEntry();
+
+    fireEvent.change(screen.getByLabelText("在线玩家名称"), { target: { value: "测试房主" } });
+    fireEvent.change(screen.getByLabelText("在线开局地图"), { target: { value: "northern-ridge" } });
+    fireEvent.click(screen.getByRole("button", { name: "创建在线房间" }));
+
+    expect(online?.onCreateRoom).toHaveBeenCalledWith({
+      name: "测试房主",
+      targetPlayerCount: 2,
+      aiPlayerCount: 0,
+      fogEnabled: false,
+      boardStructureId: "northern-ridge"
+    });
+  });
+
   it("joins an online room with room code and player name only", () => {
     const { online } = renderStartScreen();
     openOnlineEntry();
+    fireEvent.click(screen.getByRole("tab", { name: "加入房间" }));
 
     fireEvent.change(screen.getByLabelText("在线加入玩家名称"), { target: { value: "玩家B" } });
     fireEvent.change(screen.getByLabelText("在线房间码"), { target: { value: "room42" } });
@@ -398,6 +430,7 @@ describe("StartScreen", () => {
   it("advances focus while typing the split room code", async () => {
     renderStartScreen();
     openOnlineEntry();
+    fireEvent.click(screen.getByRole("tab", { name: "加入房间" }));
 
     const hiddenRoomCodeInput = screen.getByLabelText("在线房间码");
     const firstCodeInput = screen.getByLabelText("房间码第 1 位");
@@ -419,6 +452,7 @@ describe("StartScreen", () => {
   it("returns focus to the first code box when the split room code is empty", async () => {
     renderStartScreen();
     openOnlineEntry();
+    fireEvent.click(screen.getByRole("tab", { name: "加入房间" }));
 
     const firstCodeInput = screen.getByLabelText("房间码第 1 位");
     const fourthCodeInput = screen.getByLabelText("房间码第 4 位");
@@ -509,6 +543,7 @@ describe("StartScreen", () => {
     renderStartScreen({ online });
 
     expect(screen.getByText("调试模式")).toBeInTheDocument();
+    expect(screen.getByText("随机地图")).toBeInTheDocument();
     expect(screen.getAllByText("2/2").length).toBeGreaterThanOrEqual(1);
     fireEvent.click(screen.getByRole("button", { name: "房主开始游戏" }));
     expect(online.onStartRoom).toHaveBeenCalledOnce();
@@ -549,11 +584,28 @@ describe("StartScreen", () => {
     expect(command.players[4]?.factionId).toBeUndefined();
   });
 
-  it("renders only the selected player count of local faction seats", () => {
+  it("passes the selected map into a local hot-seat game", () => {
+    const { container, onCreate } = renderStartScreen();
+    openHotSeatSetup();
+    const selectedMap = BOARD_STRUCTURE_OPTIONS.find((option) => option.id === "wasteland-ring")!;
+
+    fireEvent.change(screen.getByLabelText("本地开局地图"), { target: { value: selectedMap.id } });
+    container.querySelectorAll<HTMLSelectElement>(".start-faction-select-field select").forEach((select, index) => {
+      fireEvent.change(select, { target: { value: PLAYER_FACTIONS[index].id } });
+    });
+    fireEvent.click(container.querySelector<HTMLButtonElement>(".start-local-start-button")!);
+
+    expect(onCreate).toHaveBeenCalledOnce();
+    expect(onCreate.mock.calls[0][0].boardStructureId).toBe(selectedMap.id);
+  });
+
+  it("renders six local faction seats and enables the selected player count", () => {
     const { container, onCreate } = renderStartScreen();
     openHotSeatSetup();
 
     fireEvent.click(screen.getByRole("button", { name: "5 人" }));
+    expect(container.querySelectorAll(".start-player-setup-row")).toHaveLength(6);
+    expect(container.querySelectorAll(".start-player-setup-row.inactive")).toHaveLength(1);
     const factionSelects = container.querySelectorAll<HTMLSelectElement>(".start-faction-select-field select");
     expect(factionSelects).toHaveLength(5);
 
@@ -565,7 +617,7 @@ describe("StartScreen", () => {
     const command = onCreate.mock.calls[0][0];
     expect(command.players).toHaveLength(5);
     expect(command.players[4]).toMatchObject({
-      name: PLAYER_FACTIONS[4].name,
+      name: "玩家5",
       factionId: PLAYER_FACTIONS[4].id,
       color: PLAYER_FACTIONS[4].color
     });

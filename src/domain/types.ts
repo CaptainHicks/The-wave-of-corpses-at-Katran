@@ -233,6 +233,7 @@ export type Command =
       seed?: string;
       debugMode?: boolean;
       fogEnabled?: boolean;
+      boardStructureId?: string;
     }
   | { type: "placeInitialCamp"; vertexId: string }
   | { type: "placeInitialRoute"; edgeId: string }

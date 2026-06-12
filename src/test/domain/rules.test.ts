@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   adjacentTileIds,
+  BOARD_STRUCTURE_OPTIONS,
   createStandardBoard,
   hiddenTileIdsAroundRoute,
   isResourceTile,
@@ -503,6 +504,19 @@ describe("standard board", () => {
     });
 
     expect([...resourceSignaturesByStructure.values()].some((signatures) => signatures.size > 1)).toBe(true);
+  });
+
+  it("creates a game with a selected map structure", () => {
+    const selectedMap = BOARD_STRUCTURE_OPTIONS.find((option) => option.id === "central-fracture")!;
+    const state = applyCommand(undefined, {
+      type: "createGame",
+      players: players().slice(0, 2),
+      seed: "selected-map",
+      fogEnabled: false,
+      boardStructureId: selectedMap.id
+    });
+
+    expect(state.board.structureId).toBe(selectedMap.id);
   });
 
   it("keeps initial large resource zones stocked with every normal resource", () => {
