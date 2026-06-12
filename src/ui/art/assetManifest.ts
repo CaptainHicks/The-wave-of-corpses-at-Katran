@@ -90,8 +90,8 @@ export const boardMarkerAssets = {
   zombieHorde: "/assets/board/markers/zombie-horde.v1.webp",
   merchant: "/assets/board/markers/merchant.v1.webp",
   militiaCountMarkers: {
-    inactive: "/assets/board/markers/lightning-yellow.v1.webp",
-    active: "/assets/board/markers/lightning-green.v1.webp"
+    inactive: "/assets/board/markers/militia-inactive.v1.webp",
+    active: "/assets/board/markers/militia-active.v1.webp"
   }
 };
 

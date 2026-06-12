@@ -60,7 +60,7 @@ import {
   resourceCardAssets,
   tileAssets
 } from "./art/assetManifest";
-import { preloadGameArtAssets } from "./art/preloadGameAssets";
+import { preloadGameArtAssets, warmImageAssetsWhenIdle } from "./art/preloadGameAssets";
 
 type StartMenuView = "main" | "mode" | "setup" | "rules" | "settings" | "credits" | "onlineSetup";
 type OnlineSetupMode = "select" | "create" | "join";
@@ -98,12 +98,19 @@ const ROOM_CODE_LENGTH = 6;
 const START_STAGE_WIDTH = 1672;
 const START_STAGE_HEIGHT = 941;
 const START_MENU_BUTTON_ASSETS = {
-  start: "/assets/menu/menu-start-game.png",
-  continue: "/assets/menu/menu-continue-game.png",
-  rules: "/assets/menu/menu-rules.png",
-  settings: "/assets/menu/menu-settings.png",
-  credits: "/assets/menu/menu-credits.png"
+  start: "/assets/menu/menu-start-game.v1.webp",
+  continue: "/assets/menu/menu-continue-game.v1.webp",
+  rules: "/assets/menu/menu-rules.v1.webp",
+  settings: "/assets/menu/menu-settings.v1.webp",
+  credits: "/assets/menu/menu-credits.v1.webp"
 } as const;
+
+// 首屏不直接显示、但导航到二级面板会用到的菜单配图，空闲时低优先级预热。
+const START_MENU_SECONDARY_ASSETS = [
+  "/assets/menu/mode-local-hotseat.v1.webp",
+  "/assets/menu/mode-online-play.v1.webp",
+  "/assets/menu/create-room-help.v1.webp"
+];
 const ONLINE_PLAYER_COUNT_OPTIONS = [2, 3, 4, 5, 6] as const;
 const ONLINE_AI_COUNT_OPTIONS = [0, 1, 2, 3, 4] as const;
 const RANDOM_BOARD_STRUCTURE_OPTION = {
@@ -255,7 +262,7 @@ const MARKER_GUIDE_ITEMS = [
     label: "民兵状态标记",
     imageUrl: boardMarkerAssets.militiaCountMarkers.active,
     fallback: "闪",
-    detail: "绿色闪电表示已激活民兵，黄色闪电表示未激活或待命。只有已激活民兵会计入尸潮围城防御值。"
+    detail: "绿色头像表示已激活民兵，黄色头像表示未激活或待命。只有已激活民兵会计入尸潮围城防御值。"
   }
 ] as const;
 
@@ -349,6 +356,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
 
   useEffect(() => {
     preloadGameArtAssets();
+    warmImageAssetsWhenIdle(START_MENU_SECONDARY_ASSETS);
   }, []);
 
   useEffect(() => {
@@ -563,7 +571,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
       <div className="start-mode-frame start-secondary-frame">
         <div className="start-mode-grid">
         <button className="start-mode-card" aria-label="本地热座" onClick={() => setView("setup")}>
-          <img className="start-mode-card-art" src="/assets/menu/mode-local-hotseat.png" alt="" />
+          <img className="start-mode-card-art" src="/assets/menu/mode-local-hotseat.v1.webp" alt="" />
           <span className="start-mode-card-shade" aria-hidden="true" />
           <Users size={46} />
           <strong>本地对局</strong>
@@ -574,7 +582,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
           </small>
         </button>
         <button className="start-mode-card" aria-label="在线联机" onClick={enterOnlineSetup}>
-          <img className="start-mode-card-art" src="/assets/menu/mode-online-play.png" alt="" />
+          <img className="start-mode-card-art" src="/assets/menu/mode-online-play.v1.webp" alt="" />
           <span className="start-mode-card-shade" aria-hidden="true" />
           <Globe2 size={46} />
           <strong>在线游玩</strong>
@@ -1564,7 +1572,7 @@ export function StartScreen({ hasSavedGame, savedGameSummary, onContinue, onCrea
                         <p>请向房主或其他玩家索要 6 位房间码，输入正确的房间码即可加入战局。</p>
                       </div>
                     </div>
-                    <img src="/assets/menu/create-room-help.png" alt="" />
+                    <img src="/assets/menu/create-room-help.v1.webp" alt="" />
                   </section>
                 </div>
 

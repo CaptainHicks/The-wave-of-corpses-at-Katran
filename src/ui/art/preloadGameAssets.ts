@@ -158,6 +158,19 @@ export function isCriticalGameArtPreloadComplete(): boolean {
   return !hasImagePreloadRuntime() || Boolean(criticalPreloadResult?.complete);
 }
 
+/**
+ * 在浏览器空闲时低优先级预热一组图片（复用同一套缓存去重 / decode / 超时逻辑）。
+ * 用于首屏不直接显示、但很快会被导航到的图片，例如菜单二级面板配图。
+ */
+export function warmImageAssetsWhenIdle(urls: string[]) {
+  if (!hasImagePreloadRuntime()) return;
+  const targets = uniqueUrls(urls);
+  if (targets.length === 0) return;
+  scheduleIdleWarmup(() => {
+    void warmImageUrls(targets, "low");
+  });
+}
+
 function warmImageUrls(urls: string[], fetchPriority: "high" | "low" | "auto" = "auto") {
   return Promise.all(urls.map((url) => warmImageUrl(url, fetchPriority)));
 }

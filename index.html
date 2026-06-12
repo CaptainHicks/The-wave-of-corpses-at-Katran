@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>尸潮卡坦：废土拓荒</title>
+    <!-- 首屏菜单图：解析 HTML 时即并行抓取，早于 JS bundle，避免菜单出图延迟 -->
+    <link rel="preload" as="image" href="/assets/menu/start-bg.v1.webp" fetchpriority="high" />
+    <link rel="preload" as="image" href="/assets/menu/title-logo.v1.webp" fetchpriority="high" />
+    <link rel="preload" as="image" href="/assets/menu/menu-start-game.v1.webp" />
+    <link rel="preload" as="image" href="/assets/menu/menu-continue-game.v1.webp" />
+    <link rel="preload" as="image" href="/assets/menu/menu-rules.v1.webp" />
+    <link rel="preload" as="image" href="/assets/menu/menu-settings.v1.webp" />
+    <link rel="preload" as="image" href="/assets/menu/menu-credits.v1.webp" />
   </head>
   <body>
     <div id="root"></div>
