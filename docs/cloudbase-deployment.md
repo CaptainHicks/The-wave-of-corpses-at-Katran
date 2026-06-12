@@ -36,6 +36,14 @@ CORS_ORIGINS=https://zombie-catan-d8g07asiy5e3f05c1-1435101306.tcloudbaseapp.com
 VITE_SOCKET_URL=https://<your-cloudrun-domain>
 ```
 
+当前环境（`zombie-catan-d8g07asiy5e3f05c1`）的云托管默认公网域名为：
+
+```bash
+VITE_SOCKET_URL=https://zombie-catan-wasteland-api-260196-5-1435101306.sh.run.tcloudbase.com
+```
+
+注意：`VITE_SOCKET_URL` 在前端构建时被编译进产物。`src/online/useOnlineSession.ts` 的 `resolveSocketUrl()` 在该变量为空或仍是 `{{...}}` 占位符时会回退到 `window.location.origin`，而静态托管域名与云托管后端不同源，回退后联机会失败。因此 `tcb app deploy` 前必须先 `export VITE_SOCKET_URL=<云托管域名>`。
+
 `CORS_ORIGINS` 必须填写前端实际访问域名。生产环境默认不会再放开所有来源，多个域名用英文逗号分隔，例如：
 
 ```bash
