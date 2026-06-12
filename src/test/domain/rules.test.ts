@@ -806,8 +806,55 @@ describe("setup and production", () => {
       free: true
     });
 
+    // 本回合刚建造的装甲车队不能立即移动。
+    expect(legalConvoyMoveFromEdges(state)).not.toContain(source);
+    expect(legalConvoyMoveToEdges(state, source)).toHaveLength(0);
+
+    // 进入下一回合后,该开放装甲车队才可移动。
+    state.turn += 1;
     expect(legalConvoyMoveFromEdges(state)).toContain(source);
     expect(legalConvoyMoveToEdges(state, source).length).toBeGreaterThan(0);
+  });
+
+  it("treats a convoy locked between a building and another route as not open", () => {
+    const state = setupGame();
+    state.phase = "action";
+    const player = state.players[0];
+
+    // 找一条由两条相邻边组成的链:near 与 far 共享一个交叉点 sharedVertex,
+    // near 的另一端 buildingVertex 用来放营地。
+    let near: EdgeState | undefined;
+    let far: EdgeState | undefined;
+    let sharedVertexId = "";
+    for (const edge of Object.values(state.board.edges)) {
+      for (const vId of edge.vertexIds) {
+        const neighbor = state.board.vertices[vId].edgeIds
+          .filter((other) => other !== edge.id)
+          .map((id) => state.board.edges[id])
+          .find((other) => other.tileIds.length > 0);
+        if (edge.tileIds.length > 0 && neighbor) {
+          near = edge;
+          far = neighbor;
+          sharedVertexId = vId;
+          break;
+        }
+      }
+      if (near) break;
+    }
+    expect(near).toBeTruthy();
+    expect(far).toBeTruthy();
+    const buildingVertexId = near!.vertexIds.find((vId) => vId !== sharedVertexId)!;
+
+    // 营地 — 车队A(near) — 车队B(far,真正的末端)
+    state.board.vertices[buildingVertexId].building = { ownerId: player.id, type: "camp" };
+    near!.route = { ownerId: player.id, type: "convoy", placedTurn: -1 };
+    far!.route = { ownerId: player.id, type: "convoy", placedTurn: -1 };
+
+    // 末端车队B开放;夹在营地与B之间的车队A不开放。
+    expect(legalConvoyMoveFromEdges(state)).toContain(far!.id);
+    expect(legalConvoyMoveFromEdges(state)).not.toContain(near!.id);
+    // 不开放的车队A没有任何合法落点。
+    expect(legalConvoyMoveToEdges(state, near!.id)).toHaveLength(0);
   });
 
   it("grants black market trade from either endpoint of the market edge", () => {

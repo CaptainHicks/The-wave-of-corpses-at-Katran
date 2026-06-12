@@ -769,6 +769,7 @@ describe("RightOperationDock", () => {
       routeType: "convoy",
       free: true
     });
+    state.turn += 1;
     const setTool = vi.fn();
     const setSelection = vi.fn();
     render(

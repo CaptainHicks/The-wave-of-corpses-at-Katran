@@ -975,7 +975,7 @@ function buildRoute(state: GameState, edgeId: string, routeType: RouteType, free
     takeCost(player, COSTS.convoy, free);
     player.pieces.convoys -= 1;
   }
-  edge.route = { ownerId: player.id, type: routeType };
+  edge.route = { ownerId: player.id, type: routeType, placedTurn: state.turn };
   if (routeType === "transport") {
     countedRouteEvent(state, player.name, "修建运输线", "修建", "条运输线");
   } else {
@@ -992,16 +992,18 @@ function moveConvoy(state: GameState, fromEdgeId: string, toEdgeId: string): voi
   const from = state.board.edges[fromEdgeId];
   const to = state.board.edges[toEdgeId];
   assertRule(from?.route?.ownerId === player.id && from.route.type === "convoy", "起点必须是自己的装甲车队。");
+  assertRule(from.route.placedTurn !== state.turn, "本回合刚建造的装甲车队不能立即移动。");
   assertRule(to && !to.route, "目标边必须为空。");
   assertRule(routeTypeAllowedOnEdge(state.board, toEdgeId, "convoy"), "装甲车队必须放在有效地块边缘。");
   assertRule(isOpenConvoyEdge(state.board, player.id, fromEdgeId), "只有路线末端的开放装甲车队可以移动。");
+  const placedTurn = from.route.placedTurn;
   from.route = undefined;
   const connected = edgeConnectedToPlayerNetwork(state.board, toEdgeId, player.id);
   if (!connected) {
-    from.route = { ownerId: player.id, type: "convoy" };
+    from.route = { ownerId: player.id, type: "convoy", placedTurn };
     throw new RuleError("移动后装甲车队仍必须连接自己的网络。");
   }
-  to.route = { ownerId: player.id, type: "convoy" };
+  to.route = { ownerId: player.id, type: "convoy", placedTurn };
   player.movedConvoyThisTurn = true;
   revealFromRoute(state, player, toEdgeId);
   event(state, `${player.name} 移动 1 个开放装甲车队。`);
@@ -1271,12 +1273,15 @@ function connectedByOwnRoutes(board: BoardState, playerId: string, from: string,
 function isOpenConvoyEdge(board: BoardState, playerId: string, edgeId: string): boolean {
   const edge = board.edges[edgeId];
   if (edge?.route?.ownerId !== playerId || edge.route.type !== "convoy") return false;
-  const ownNeighbors = edge.vertexIds.flatMap((vertexId) =>
-    board.vertices[vertexId].edgeIds.filter(
+  // 开放端:某个端点既没有自己的建筑,也没有自己的其他路线。只要有一端开放即可移动。
+  return edge.vertexIds.some((vertexId) => {
+    const vertex = board.vertices[vertexId];
+    if (vertex.building?.ownerId === playerId) return false;
+    const hasOwnNeighborRoute = vertex.edgeIds.some(
       (neighborId) => neighborId !== edgeId && board.edges[neighborId].route?.ownerId === playerId
-    )
-  );
-  return ownNeighbors.length <= 1;
+    );
+    return !hasOwnNeighborRoute;
+  });
 }
 
 function edgeConnectedToPlayerNetworkExcluding(
@@ -1618,6 +1623,7 @@ export function legalConvoyMoveFromEdges(state: GameState): string[] {
   const player = currentPlayer(state);
   if (player.movedConvoyThisTurn) return [];
   return Object.values(state.board.edges)
+    .filter((edge) => edge.route?.placedTurn !== state.turn)
     .filter((edge) => isOpenConvoyEdge(state.board, player.id, edge.id))
     .map((edge) => edge.id);
 }
@@ -1625,7 +1631,14 @@ export function legalConvoyMoveFromEdges(state: GameState): string[] {
 export function legalConvoyMoveToEdges(state: GameState, fromEdgeId: string): string[] {
   if (state.phase !== "action") return [];
   const player = currentPlayer(state);
-  if (player.movedConvoyThisTurn || !isOpenConvoyEdge(state.board, player.id, fromEdgeId)) return [];
+  const from = state.board.edges[fromEdgeId];
+  if (
+    player.movedConvoyThisTurn ||
+    from?.route?.placedTurn === state.turn ||
+    !isOpenConvoyEdge(state.board, player.id, fromEdgeId)
+  ) {
+    return [];
+  }
   return Object.values(state.board.edges)
     .filter((edge) => !edge.route)
     .filter((edge) => routeTypeAllowedOnEdge(state.board, edge.id, "convoy"))

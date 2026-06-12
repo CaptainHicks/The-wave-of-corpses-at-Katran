@@ -65,6 +65,8 @@ export interface EdgeState {
   route?: {
     ownerId: string;
     type: RouteType;
+    /** 该路线放置时所处的回合,用于禁止本回合刚建造的装甲车队立即移动。 */
+    placedTurn?: number;
   };
 }
 

@@ -304,6 +304,7 @@ describe("BoardView interaction targets", () => {
     const sourceEdgeId = legalBuildEdges(state, "convoy")[0];
     expect(sourceEdgeId).toBeTruthy();
     state = applyCommand(state, { type: "buildRoute", edgeId: sourceEdgeId, routeType: "convoy", free: true });
+    state.turn += 1;
     expect(legalConvoyMoveFromEdges(state)).toContain(sourceEdgeId);
 
     const { container } = renderBoard(state, "none", vi.fn(), { kind: "moveConvoy" });
@@ -318,6 +319,7 @@ describe("BoardView interaction targets", () => {
     const sourceEdgeId = legalBuildEdges(state, "convoy")[0];
     expect(sourceEdgeId).toBeTruthy();
     state = applyCommand(state, { type: "buildRoute", edgeId: sourceEdgeId, routeType: "convoy", free: true });
+    state.turn += 1;
     const targetEdgeId = legalConvoyMoveToEdges(state, sourceEdgeId)[0];
     expect(targetEdgeId).toBeTruthy();
 
