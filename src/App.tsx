@@ -3,7 +3,7 @@ import { activeDecisionPlayer, isAiPlayer, stepAiOnce } from "./domain/ai";
 import { applyCommand, serializeStateForText, RuleError } from "./domain/rules";
 import type { Command, GameState } from "./domain/types";
 import { buildOnlineViewRevision, materializeOnlineGameState } from "./online/clientState";
-import { loadGame, saveGame } from "./persistence/storage";
+import { loadGame, scheduleSaveGame } from "./persistence/storage";
 import { useOnlineSession } from "./online/useOnlineSession";
 import { diffGameStates } from "./ui/animation/diffGameStates";
 import { useGameAnimations } from "./ui/animation/useGameAnimations";
@@ -144,7 +144,7 @@ function App() {
 
   useEffect(() => {
     if (localState) {
-      saveGame(localState);
+      scheduleSaveGame(localState);
       setSavedGame(localState);
     }
   }, [localState]);
@@ -273,6 +273,9 @@ function App() {
 
   useEffect(() => {
     if (!localState || !isAiPlayer(activeDecisionPlayer(localState))) return;
+    // 本地游玩时,打开系统菜单会暂停游戏:此时不再调度 AI 的下一步。
+    // 关闭菜单后该 effect 会因 systemMenuOpen 变化而重跑,自动恢复推进。
+    if (systemMenuOpen) return;
     setPrivacy(false);
     // 逐步推进 AI:每次只走一步,留出时间播放该步的动画(尤其是掷骰轮盘),
     // 而不是一次性算完整个 AI 回合后直接闪到下一个玩家。
@@ -290,7 +293,7 @@ function App() {
       setOperationContext(undefined);
     }, stepDelay);
     return () => window.clearTimeout(timer);
-  }, [localState]);
+  }, [localState, systemMenuOpen]);
 
   const submitOnline = (command: Command) => {
     if (!onlineSession.gameView) return;

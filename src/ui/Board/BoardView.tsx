@@ -1,4 +1,4 @@
-import { useMemo, type Dispatch, type SetStateAction } from "react";
+import { memo, useMemo, type Dispatch, type SetStateAction } from "react";
 import { COSTS } from "../../domain/constants";
 import {
   adjacentTileIds,
@@ -110,7 +110,7 @@ export function describeInitialCampResourceZone(board: BoardState): string {
   return "中部大资源区";
 }
 
-export function BoardView({
+function BoardViewImpl({
   state,
   tool,
   selection,
@@ -771,3 +771,7 @@ export function BoardView({
     </svg>
   );
 }
+
+// 回合计时器每 250ms 触发一次 GameShell 重渲染。棋盘本身只在游戏状态/选择/工具变化时才需要重画,
+// 用 memo 跳过计时器 tick 带来的整块棋盘重渲染(随着棋子增多,这部分开销会越来越大)。
+export const BoardView = memo(BoardViewImpl);

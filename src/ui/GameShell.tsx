@@ -218,8 +218,10 @@ export function GameShell({
   const shownOnlineTurnReminderKeysRef = useRef<Set<string>>(new Set());
   const submittedTimeoutKeyRef = useRef<string>();
   const submitRef = useRef(submit);
-  const systemMenuOpenRef = useRef(systemMenuOpen);
-  systemMenuOpenRef.current = systemMenuOpen;
+  // 点击菜单暂停计时器的机制只用于本地(hot-seat)游玩;在线游玩不暂停。
+  const menuPauseActive = interactionMode === "hot-seat" && Boolean(systemMenuOpen);
+  const menuPauseActiveRef = useRef(menuPauseActive);
+  menuPauseActiveRef.current = menuPauseActive;
   const pauseStartRef = useRef<number>(0);
   const totalPausedMsRef = useRef(0);
   const [stageScale, setStageScale] = useState(getStageScale);
@@ -570,13 +572,13 @@ export function GameShell({
   }, []);
 
   useEffect(() => {
-    if (systemMenuOpen) {
+    if (menuPauseActive) {
       pauseStartRef.current = Date.now();
     } else if (pauseStartRef.current) {
       totalPausedMsRef.current += Date.now() - pauseStartRef.current;
       pauseStartRef.current = 0;
     }
-  }, [systemMenuOpen]);
+  }, [menuPauseActive]);
 
   useEffect(() => {
     if (mode === "victory") {
@@ -588,10 +590,11 @@ export function GameShell({
     submittedTimeoutKeyRef.current = undefined;
     setTurnTimeRemaining(TURN_TIME_LIMIT_SECONDS);
     totalPausedMsRef.current = 0;
-    pauseStartRef.current = 0;
+    // 若计时器在菜单已打开时重启,从当前时刻开始记账暂停时长,避免按 epoch 0 计算。
+    pauseStartRef.current = menuPauseActiveRef.current ? startedAt : 0;
 
     const timerId = window.setInterval(() => {
-      const pausedMs = totalPausedMsRef.current + (systemMenuOpenRef.current ? Date.now() - pauseStartRef.current : 0);
+      const pausedMs = totalPausedMsRef.current + (menuPauseActiveRef.current ? Date.now() - pauseStartRef.current : 0);
       const elapsedMs = Date.now() - startedAt - pausedMs;
       const nextRemaining = Math.max(0, Math.ceil((TURN_TIME_LIMIT_SECONDS * 1000 - elapsedMs) / 1000));
       setTurnTimeRemaining(nextRemaining);

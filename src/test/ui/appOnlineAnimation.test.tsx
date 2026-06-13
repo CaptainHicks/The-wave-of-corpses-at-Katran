@@ -66,7 +66,8 @@ vi.mock("../../ui/audio/useAudio", () => ({
 
 vi.mock("../../persistence/storage", () => ({
   loadGame: () => undefined,
-  saveGame: () => undefined
+  saveGame: () => undefined,
+  scheduleSaveGame: () => undefined
 }));
 
 vi.mock("../../ui/GameShell", () => ({
